@@ -173,6 +173,12 @@ details.spam summary { cursor: pointer; }
 ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 code { font-family: var(--font-mono); font-size: 0.86em; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
 footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
+.tip { border-top: 4px solid var(--sign); }
+.tip-addr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tip-addr code { font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; user-select: all; overflow-wrap: anywhere; min-width: 0; }
+.soon { align-content: start; }
+.soon .pill { width: fit-content; }
+.helped { font-size: 0.92rem; color: var(--muted); }
 
 @media (max-width: 520px) {
   .cd-cell { min-width: 64px; padding: 6px 9px 4px; }
@@ -275,6 +281,24 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
       <li><p><b>Claim it 24 hours after proving.</b> This second Ethereum transaction releases the funds to the same address on Ethereum.</p></li>
     </ol>
     <p class="small muted">After 26 October the same steps still work, but by calling the bridge contracts on Ethereum directly. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
+  </section>
+
+  <section class="cols" aria-label="Tip jar and what is next">
+    <div class="panel tip" id="tip">
+      <h2>Tip jar</h2>
+      <p>If this page helped, or you found funds on Blast you had forgotten about, you can send a small thank-you. It is completely optional.</p>
+      <div class="tip-addr">
+        <code id="tip-address">0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2</code>
+        <button class="primary" type="button" data-copy="0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2">Copy address</button>
+      </div>
+      <p class="small muted">Any token or NFT on any EVM chain works: Ethereum, Base, Arbitrum, Abstract, Blast and others. Do not send from Solana, Bitcoin or Tron.</p>
+      <p class="small muted">The checker is free and works the same with or without a tip. Nothing is unlocked by sending anything. No real tool will ever ask you to pay to release your Blast funds.</p>
+    </div>
+    <div class="panel soon">
+      <span class="pill info">Coming soon</span>
+      <h2>Abstract chain checker</h2>
+      <p>A read-only checker like this one is being built for Abstract: paste an address, see what it holds and what needs attention. No wallet connection there either.</p>
+    </div>
   </section>
 
   <section class="cols" aria-label="About this page">
@@ -778,9 +802,10 @@ function walletCard(res, ctx) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-copy]");
   if (!b) return;
+  b.dataset.label ??= b.textContent;
   try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
   catch { b.textContent = b.dataset.copy; }
-  setTimeout(() => (b.textContent = "Copy"), 1500);
+  setTimeout(() => (b.textContent = b.dataset.label), 1500);
 });
 
 $("check-form").addEventListener("submit", async (e) => {
@@ -795,18 +820,23 @@ $("check-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   const box = $("results");
   box.innerHTML = list.map((a, i) => `<article class="wallet" id="w-${i}"><p class="skeleton">${esc(short(a))} · reading Blast and Ethereum…</p></article>`).join("");
-  let done = 0;
+  let done = 0, helped = false;
   try {
     const ctx = await context();
     renderLive(ctx);
     await pool(list, 2, async (a, i) => {
       let html;
-      try { html = walletCard(await checkWallet(a), await context()); }
+      try {
+        const res = await checkWallet(a);
+        if (res.tokens.some((t) => (t.usd || 0) >= 1) || res.withdrawals.some((w) => w.worth === true)) helped = true;
+        html = walletCard(res, await context());
+      }
       catch (err) { html = `<article class="wallet"><p class="err-box">${esc(short(a))}: could not check (${esc(err.message)}). Try again in a minute.</p></article>`; }
       $(`w-${i}`).outerHTML = html;
       done++;
       msg.textContent = done < list.length ? `Checked ${done} of ${list.length}…` : `Checked ${list.length} address${list.length > 1 ? "es" : ""} at ${new Date().toLocaleTimeString()}.`;
     });
+    if (helped) box.insertAdjacentHTML("beforeend", `<p class="helped">Found something worth getting out? If this saved you time or money, the <a href="#tip">tip jar</a> is below. Entirely optional.</p>`);
   } finally { btn.disabled = false; }
 });
 </script>

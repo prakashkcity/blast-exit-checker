@@ -29,6 +29,14 @@ Contracts read on Ethereum, all through `eth_call`:
 
 Fee estimates use the medians of recent Blast portal transactions as of 24 Oct 2026: prove ≈ 429,500 gas and claim ≈ 241,100 gas, multiplied by the live Ethereum base fee plus a 0.02 gwei tip.
 
+## Tip jar
+
+If the page helped you, a small tip is welcome but never required: any token or NFT on any EVM chain to `0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2`. The checker works the same either way, and nothing is unlocked by tipping.
+
+## Coming soon
+
+A read-only checker like this one for Abstract.
+
 ## Fonts
 
 Overpass and Overpass Mono, © The Overpass Project Authors, under the SIL Open Font License 1.1 (see `fonts/OFL-*.txt`).
