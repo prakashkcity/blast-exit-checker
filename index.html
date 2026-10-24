@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blast Exit Checker</title>
+<meta name="description" content="Paste a wallet address and see what it still holds on Blast L2, which withdrawals are waiting to be proven or claimed, and whether the Ethereum fees are worth it. Read-only: no wallet connection.">
+<meta property="og:title" content="Blast Exit Checker">
+<meta property="og:description" content="Read-only checker for the Blast L2 shutdown: balances, withdrawal status, fees vs value. No wallet connection, no signatures.">
+<meta property="og:type" content="website">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='10' width='60' height='44' rx='8' fill='%230f6b4a'/%3E%3Crect x='6' y='14' width='52' height='36' rx='5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M20 40 L40 24 M30 24 H40 V34' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* Layout: a highway exit sign holds the countdown; under it one working column —
+   live chain status, the address box, a results board per wallet, then how to get out. */
+@font-face { font-family: "Overpass"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("fonts/overpass-latin.woff2") format("woff2"); }
+@font-face { font-family: "Overpass Mono"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("fonts/overpass-mono-latin.woff2") format("woff2"); }
+
+:root {
+  --sign: #0f6b4a;          /* highway guide-sign green */
+  --sign-deep: #0b5239;
+  --sign-ink: #ffffff;
+  --bg: #edf0ed;            /* asphalt-tinted paper */
+  --surface: #ffffff;
+  --ink: #16201b;
+  --muted: #56625c;
+  --line: #d2d9d4;
+  --focus: #1d6fd6;
+  --ok: #13643e;  --ok-bg: #dcf1e5;
+  --warn: #8a5600; --warn-bg: #fdf0d3;
+  --bad: #ad2316; --bad-bg: #fbe5e2;
+  --info: #2c4c78; --info-bg: #e5ecf6;
+  --font-sign: "Overpass", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Overpass", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Overpass Mono", ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --r: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sign: #12704e; --sign-deep: #0c4f37; --sign-ink: #ffffff;
+    --bg: #0f1412; --surface: #161c19; --ink: #e5ebe7; --muted: #9ba8a1; --line: #29332e; --focus: #7fb0ff;
+    --ok: #63d39d; --ok-bg: #11301f; --warn: #f1b450; --warn-bg: #33260c; --bad: #ff8b7b; --bad-bg: #3a1712; --info: #a3c1f2; --info-bg: #17243a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sign: #12704e; --sign-deep: #0c4f37; --sign-ink: #ffffff;
+  --bg: #0f1412; --surface: #161c19; --ink: #e5ebe7; --muted: #9ba8a1; --line: #29332e; --focus: #7fb0ff;
+  --ok: #63d39d; --ok-bg: #11301f; --warn: #f1b450; --warn-bg: #33260c; --bad: #ff8b7b; --bad-bg: #3a1712; --info: #a3c1f2; --info-bg: #17243a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(20px, env(safe-area-inset-top, 0px)) max(32px, env(safe-area-inset-bottom, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+a { color: inherit; text-underline-offset: 3px; }
+a:hover { color: var(--sign); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.15; margin: 0; }
+h2 { font-family: var(--font-sign); font-size: 1.45rem; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 0.86rem; }
+
+/* ---- the exit sign ---- */
+.sign-post { display: grid; justify-items: center; }
+.sign {
+  position: relative; width: 100%; background: var(--sign); color: var(--sign-ink);
+  border-radius: 18px; padding: 10px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 12px 30px -18px rgba(0,0,0,.55);
+}
+.sign-face { border: 3px solid var(--sign-ink); border-radius: 12px; padding: 26px clamp(16px, 4vw, 40px) 22px; display: grid; gap: 14px; }
+.sign-tab {
+  position: absolute; top: -18px; left: clamp(18px, 5vw, 48px);
+  background: var(--sign); color: var(--sign-ink); border: 3px solid var(--sign-ink); border-radius: 8px;
+  font-family: var(--font-sign); font-weight: 800; letter-spacing: 0.12em; font-size: 0.95rem; padding: 3px 12px 1px;
+}
+.sign-kicker { font-family: var(--font-sign); font-weight: 700; letter-spacing: 0.14em; font-size: 0.8rem; opacity: .9; text-transform: uppercase; }
+.sign-title { font-family: var(--font-sign); font-weight: 800; font-size: clamp(1.7rem, 5.2vw, 3rem); letter-spacing: -0.015em; }
+.sign-title span { white-space: nowrap; }
+.countdown { display: flex; flex-wrap: wrap; gap: 10px; }
+.cd-cell { background: var(--sign-deep); border-radius: 8px; padding: 8px 12px 6px; min-width: 76px; display: grid; justify-items: start; }
+.cd-cell b { font-family: var(--font-mono); font-weight: 700; font-size: clamp(1.6rem, 5vw, 2.3rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.cd-cell i { font-style: normal; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; opacity: .85; }
+.sign-note { font-size: 0.88rem; opacity: .92; max-width: 70ch; }
+.sign-pole { width: 18px; height: 22px; background: linear-gradient(90deg, #8d958f, #b9c0bb 45%, #7e8680); border-radius: 0 0 3px 3px; }
+
+/* ---- live strip ---- */
+.live { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.live > div { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.live dt { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.live dd { margin: 0; font-family: var(--font-mono); font-size: 1.02rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.live .sub { font-family: var(--font-body); font-size: 0.8rem; color: var(--muted); }
+
+/* ---- check form ---- */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: clamp(16px, 3vw, 24px); display: grid; gap: 14px; min-width: 0; }
+label.field { display: grid; gap: 6px; font-weight: 700; }
+textarea {
+  width: 100%; min-height: 96px; resize: vertical; padding: 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: var(--font-mono); font-size: 0.92rem; line-height: 1.5;
+}
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button.primary {
+  appearance: none; border: 0; border-radius: 8px; background: var(--sign); color: var(--sign-ink);
+  font-family: var(--font-sign); font-weight: 800; font-size: 1rem; letter-spacing: 0.02em;
+  padding: 11px 20px 9px; cursor: pointer;
+}
+button.primary:hover { background: var(--sign-deep); }
+button.primary[disabled] { opacity: .6; cursor: progress; }
+button.ghost { appearance: none; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; }
+.safe { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.9rem; }
+.safe span { display: inline-flex; gap: 6px; align-items: center; }
+.safe svg { flex: none; color: var(--ok); }
+.form-msg { font-size: 0.9rem; }
+.form-msg.err { color: var(--bad); }
+
+/* ---- results ---- */
+#results { display: grid; gap: 18px; }
+.wallet { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: clamp(14px, 3vw, 22px); display: grid; gap: 14px; min-width: 0; }
+.wallet.example { border-style: dashed; }
+.example-tag { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--info); background: var(--info-bg); border-radius: 999px; padding: 2px 10px; width: fit-content; }
+.wallet-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.wallet-id { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; min-width: 0; }
+.wallet-id .mono { font-size: 1.02rem; font-weight: 700; overflow-wrap: anywhere; }
+.wallet-id a { font-size: 0.85rem; }
+.sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.sum div { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; display: grid; }
+.sum b { font-family: var(--font-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.sum span { font-size: 0.8rem; color: var(--muted); }
+.pill { display: inline-block; border-radius: 999px; padding: 3px 11px 2px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); }
+.pill.warn { color: var(--warn); background: var(--warn-bg); }
+.pill.bad { color: var(--bad); background: var(--bad-bg); }
+.pill.info { color: var(--info); background: var(--info-bg); }
+.pill.none { color: var(--muted); background: var(--bg); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; background: var(--bg); white-space: nowrap; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+th.num { text-align: right; }
+td .note { color: var(--muted); font-size: 0.85rem; }
+td > .note:only-child { display: block; min-width: 180px; }
+.board td.status, .board td.mono { white-space: nowrap; }
+.board .when { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+details.spam { font-size: 0.88rem; color: var(--muted); }
+details.spam summary { cursor: pointer; }
+.empty { color: var(--muted); font-size: 0.92rem; }
+.err-box { color: var(--bad); background: var(--bad-bg); border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; }
+.skeleton { color: var(--muted); font-family: var(--font-mono); font-size: 0.9rem; }
+
+/* ---- how-to + about ---- */
+.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
+.steps li::before {
+  content: counter(s); font-family: var(--font-sign); font-weight: 800; color: var(--sign-ink); background: var(--sign);
+  width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; padding-top: 2px;
+}
+.steps p { max-width: 68ch; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
+
+@media (max-width: 520px) {
+  .cd-cell { min-width: 64px; padding: 6px 9px 4px; }
+  th, td { padding: 7px 9px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="sign-post">
+    <header class="sign" aria-labelledby="sign-title">
+      <div class="sign-tab" aria-hidden="true">EXIT</div>
+      <div class="sign-face">
+        <p class="sign-kicker">Blast L2 is shutting down</p>
+        <h1 class="sign-title" id="sign-title">Normal bridge closes <span>26 Oct 2026</span></h1>
+        <div class="countdown" id="countdown" aria-live="off">
+          <div class="cd-cell"><b id="cd-d">--</b><i>days</i></div>
+          <div class="cd-cell"><b id="cd-h">--</b><i>hours</i></div>
+          <div class="cd-cell"><b id="cd-m">--</b><i>min</i></div>
+          <div class="cd-cell"><b id="cd-s">--</b><i>sec</i></div>
+        </div>
+        <p class="sign-note" id="cd-note">Blast's notice gives the date "until October 26, 2026" with no time of day, so this counts to 00:00 UTC on 26 October, the earliest reading. After that, assets stay withdrawable, but only by using the bridge contracts on Ethereum directly.</p>
+      </div>
+    </header>
+    <div class="sign-pole" aria-hidden="true"></div>
+  </div>
+
+  <dl class="live" id="live" aria-live="polite">
+    <div><dt>Blast chain</dt><dd id="lv-blast">checking…</dd><span class="sub" id="lv-blast-sub">&nbsp;</span></div>
+    <div><dt>Ethereum gas</dt><dd id="lv-gas">checking…</dd><span class="sub" id="lv-gas-sub">&nbsp;</span></div>
+    <div><dt>Withdrawal delay</dt><dd id="lv-delay">checking…</dd><span class="sub" id="lv-delay-sub">read from the L1 contract</span></div>
+    <div><dt>Cost to claim one withdrawal</dt><dd id="lv-cost">checking…</dd><span class="sub" id="lv-cost-sub">prove + claim on Ethereum</span></div>
+  </dl>
+
+  <section class="panel" aria-labelledby="check-h">
+    <h2 id="check-h">Check a wallet</h2>
+    <form id="check-form" novalidate>
+      <div style="display:grid;gap:12px">
+        <label class="field" for="addrs">Wallet address (paste one, or up to 10 separated by spaces or new lines)
+          <textarea id="addrs" name="addrs" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="0x…"></textarea>
+        </label>
+        <div class="row">
+          <button class="primary" id="check-btn" type="submit">Check on Blast</button>
+          <span class="form-msg" id="form-msg" role="status"></span>
+        </div>
+      </div>
+    </form>
+    <div class="safe" aria-label="Safety">
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>No wallet connection</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>No signatures, no approvals, no transactions</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Only public read-only lookups</span>
+    </div>
+    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. Any "checker" that asks for those, or asks you to connect and sign, is a scam.</p>
+  </section>
+
+  <section aria-labelledby="results-h" style="display:grid;gap:14px">
+    <h2 id="results-h">Results</h2>
+    <div id="results">
+      <article class="wallet example" aria-label="Example result">
+        <span class="example-tag">Example output, not a real wallet</span>
+        <header class="wallet-head">
+          <div class="wallet-id"><span class="mono">0x1234…abcd</span><span class="small muted">Blastscan · Copy</span></div>
+          <span class="pill ok">Worth withdrawing</span>
+        </header>
+        <div class="sum">
+          <div><b>$41.20</b><span>Still on Blast</span></div>
+          <div><b>$0.31</b><span>Fees to withdraw it now</span></div>
+          <div><b>$40.89</b><span>You would keep</span></div>
+        </div>
+        <h3>On Blast now</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td>ETH</td><td class="num">0.0142</td><td class="num">$33.20</td><td><span class="note">Withdraw through the bridge</span></td></tr>
+            <tr><td>USDB</td><td class="num">8.00</td><td class="num">$7.98</td><td><span class="note">Arrives on Ethereum as DAI after an extra claim, or swap to ETH on Blast first</span></td></tr>
+            <tr><td>BLAST</td><td class="num">300.00</td><td class="num">$0.02</td><td><span class="note">Bridging costs more than it is worth</span></td></tr>
+          </tbody>
+        </table></div>
+        <h3>Withdrawals already started</h3>
+        <div class="table-wrap board"><table>
+          <thead><tr><th>Started</th><th>Amount</th><th>Status</th><th>Next step</th><th>Worth finishing?</th></tr></thead>
+          <tbody>
+            <tr><td class="when">24 Oct 14:22</td><td class="mono">0.00048 ETH</td><td class="status"><span class="pill info">Proven</span></td><td>Claim opens 25 Oct 19:40</td><td><span class="pill ok">Yes</span> <span class="note">$1.10 vs $0.06</span></td></tr>
+            <tr><td class="when">24 Oct 14:31</td><td class="mono">575 BLAST</td><td class="status"><span class="pill warn">Ready to prove</span></td><td>Prove on Ethereum</td><td><span class="pill bad">No</span> <span class="note">$0.03 vs $0.15</span></td></tr>
+          </tbody>
+        </table></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="how-h">
+    <h2 id="how-h">How to get funds off Blast</h2>
+    <ol class="steps">
+      <li><p><b>Gather small balances first.</b> Every withdrawal costs the same on Ethereum, whatever the amount. If you have several wallets with a little ETH each, send it to one wallet on Blast first; a transfer on Blast costs a tiny fraction of a cent.</p></li>
+      <li><p><b>Turn tokens into ETH if you want ETH.</b> WETH must be unwrapped to ETH before it can be withdrawn. USDB withdrawn through the bridge arrives on Ethereum as DAI and needs one more claim transaction, so swapping it to ETH on a Blast exchange first is often simpler.</p></li>
+      <li><p><b>Start the withdrawal on <a href="https://blast.io/en/bridge" target="_blank" rel="noopener noreferrer">blast.io/en/bridge</a></b>, the official bridge, until 26 October. This needs a little ETH on Blast for gas.</p></li>
+      <li><p><b>Prove it on Ethereum about an hour later.</b> This is the first Ethereum transaction and needs ETH on Ethereum for gas. The bridge page shows a Prove button once it is ready.</p></li>
+      <li><p><b>Claim it 24 hours after proving.</b> This second Ethereum transaction releases the funds to the same address on Ethereum.</p></li>
+    </ol>
+    <p class="small muted">After 26 October the same steps still work, but by calling the bridge contracts on Ethereum directly. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
+  </section>
+
+  <section class="cols" aria-label="About this page">
+    <div class="panel">
+      <h2>How the numbers work</h2>
+      <ul class="plain small">
+        <li><b>Fees:</b> one withdrawal needs two Ethereum transactions. Proving takes about 430,000 gas and claiming about 240,000 gas, the medians of recent transactions on the Blast portal contract. The page multiplies these by the current Ethereum gas price.</li>
+        <li><b>Worth it?</b> "Yes" means the value is higher than the Ethereum fees still to pay. Ethereum gas changes by the minute, so a "No" can turn into a "Yes" when gas is cheaper.</li>
+        <li><b>Prices:</b> ETH, USDB and BLAST from CoinGecko; other tokens from DexScreener, and only if a Blast pool holds at least $1,000 of liquidity.</li>
+        <li><b>Spam tokens</b> that scammers airdropped are counted but hidden. Never interact with them or visit sites named in them.</li>
+        <li>Withdrawal history covers the address's latest 100 transactions on Blast.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>What this page reads</h2>
+      <p class="small">Everything runs in your browser. There is no server and no tracking. Your address goes only to these public services:</p>
+      <ul class="plain small">
+        <li><code>rpc.blast.io</code>, <code>blast-rpc.publicnode.com</code>: Blast balances and transactions</li>
+        <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): withdrawal status on Ethereum, gas price</li>
+        <li><code>api.routescan.io</code>: which tokens an address holds, transaction history</li>
+        <li><code>api.coingecko.com</code>, <code>api.dexscreener.com</code>: prices (no address sent)</li>
+      </ul>
+      <p class="small muted">Only read requests are made (balances, contract reads, receipts). Open your browser's developer tools, Network tab, to watch every request, or view the page source; it is one file.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>Unofficial community tool. Not affiliated with Blast.</b> Read-only; it cannot move funds. Check results on <a href="https://blastscan.io" target="_blank" rel="noopener noreferrer">blastscan.io</a> before acting, and withdraw only through the official bridge or Blast's documented contracts.</p>
+    <p>Contract addresses used: Blast portal on Ethereum <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Configuration. Addresses and selectors were read from the chain / computed with
+// ethers on 2026-10-24; gas figures are medians of recent Blast portal txs.
+// ---------------------------------------------------------------------------
+const CFG = {
+  blastRpcs: ["https://rpc.blast.io", "https://blast-rpc.publicnode.com"],
+  l1Rpcs: ["https://ethereum-rpc.publicnode.com", "https://1rpc.io/eth", "https://cloudflare-eth.com"],
+  routescan: "https://api.routescan.io/v2/network/mainnet/evm/81457",
+  portal: "0x0ec68c5b10f21effb74f2a5c61dfe6b08c0db6cb",
+  oracle: "0x826d1b0d4111ad9146eb8941d7ca2b6a44215c76",
+  queue: "0x98078db053902644191f93988341e31289e1c8fe",      // Blast ETH yield manager (withdrawal queue)
+  passer: "0x4200000000000000000000000000000000000016",
+  topicMessagePassed: "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054",
+  deadlineMs: Date.UTC(2026, 9, 26, 0, 0, 0),
+  proveGas: 429493n,
+  finalizeGas: 241139n,
+  usdbClaimGas: 104000n,      // third L1 tx for USDB → DAI (high end of recent claims)
+  tipWei: 20000000n,          // 0.02 gwei
+  minLiquidityUsd: 1000,
+  maxWallets: 10,
+};
+const TOKENS = {
+  "0x4300000000000000000000000000000000000003": { symbol: "USDB", decimals: 18, cg: "usdb" },
+  "0x4300000000000000000000000000000000000004": { symbol: "WETH", decimals: 18, cg: "ethereum" },
+  "0xb1a5700fa2358173fe465e6ea4ff52e36e88e2ad": { symbol: "BLAST", decimals: 18, cg: "blast" },
+};
+const USDB = "0x4300000000000000000000000000000000000003";
+const WETH = "0x4300000000000000000000000000000000000004";
+const BLAST = "0xb1a5700fa2358173fe465e6ea4ff52e36e88e2ad";
+const BRIDGES = {
+  "0x4300000000000000000000000000000000000005": "Blast bridge",
+  "0x4200000000000000000000000000000000000010": "Standard bridge",
+  "0x4200000000000000000000000000000000000016": "Message passer",
+};
+const SEL = {
+  proven: "0xe965084c", finalized: "0xa14238e7", latestIdx: "0x69f16eec", getOutput: "0xa25ae557",
+  finPeriod: "0xf4daa291", lastFinReq: "0x4f069a13", paused: "0x5c975abb", balanceOf: "0x70a08231",
+};
+const SPAM_RE = /https?:|www\.|\.com\b|\.xyz|\.net\b|\.org\b|\.io\b|\.pro\b|\.app\b|t\.me|t\.ly|claim|visit|reward|airdrop|voucher|bonus|\[|!|\$\s/i;
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const strip = (h) => (h.startsWith("0x") ? h.slice(2) : h);
+const arg = (h) => strip(h).toLowerCase().padStart(64, "0");
+const uarg = (n) => BigInt(n).toString(16).padStart(64, "0");
+const word = (h, i) => "0x" + strip(h).slice(64 * i, 64 * (i + 1));
+const big = (h) => (h && h !== "0x" ? BigInt(h) : 0n);
+const call = (to, data) => ({ method: "eth_call", params: [{ to, data }, "latest"] });
+const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+const units = (raw, dec) => Number(raw) / 10 ** dec;
+const eth = (wei) => Number(wei) / 1e18;
+function fmtAmt(x) {
+  if (!isFinite(x) || x === 0) return "0";
+  if (x >= 1000) return x.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (x >= 1) return x.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (x >= 0.0001) return x.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  return x.toExponential(2);
+}
+function fmtUsd(x) {
+  if (x == null || !isFinite(x)) return "?";
+  if (x >= 0.01) return "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return x > 0 ? "<$0.01" : "$0";
+}
+function fmtWhen(sec) {
+  return new Date(Number(sec) * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function fmtIn(sec) {
+  const s = Math.max(0, Math.round(sec));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+const gwei = (w) => (Number(w) / 1e9).toLocaleString("en-US", { maximumFractionDigits: 3 });
+
+async function pool(items, n, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); }
+  }));
+  return out;
+}
+
+// GET with retry. A 429 often arrives without CORS headers and surfaces as a network
+// error, so network errors are retried too.
+async function getJson(url, tries = 4) {
+  for (let t = 0; ; t++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+      if (r.status === 429 || r.status >= 500) throw new Error(`${new URL(url).host} is busy (HTTP ${r.status})`);
+      if (!r.ok) throw Object.assign(new Error(`${new URL(url).host} answered HTTP ${r.status}`), { fatal: true });
+      return await r.json();
+    } catch (e) {
+      if (e.fatal || t + 1 >= tries) throw e;
+      await sleep(Math.min(1000 * 2 ** t, 8000));
+    }
+  }
+}
+
+const isRevert = (e) => e && /revert|execution/i.test(e.message || "");
+async function postJson(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`${new URL(url).host} answered HTTP ${r.status}`);
+  return r.json();
+}
+async function postBatch(url, chunk) {
+  const j = await postJson(url, chunk.map((c, i) => ({ jsonrpc: "2.0", id: i, method: c.method, params: c.params })));
+  if (!Array.isArray(j)) throw new Error(`${new URL(url).host} refused a batch`);
+  const by = new Map(j.map((x) => [x.id, x]));
+  return chunk.map((_, i) => {
+    const x = by.get(i);
+    if (!x) throw new Error(`${new URL(url).host} dropped part of a batch`);
+    if (x.error) { if (isRevert(x.error)) return null; throw new Error(x.error.message || "RPC error"); }
+    return x.result;
+  });
+}
+async function postSingles(url, chunk) {
+  return pool(chunk, 4, async (c) => {
+    const x = await postJson(url, { jsonrpc: "2.0", id: 1, method: c.method, params: c.params });
+    if (x.error) { if (isRevert(x.error)) return null; throw new Error(x.error.message || "RPC error"); }
+    return x.result;
+  });
+}
+// JSON-RPC: batches of 40 on the first endpoint; single calls on fallbacks (some cap batch size).
+// A revert comes back as null; any other failure moves to the next endpoint, never to a fake 0.
+async function rpc(urls, calls) {
+  let lastErr;
+  for (let u = 0; u < urls.length; u++) {
+    try {
+      const out = [];
+      for (let i = 0; i < calls.length; i += 40) {
+        const chunk = calls.slice(i, i + 40);
+        out.push(...(u === 0 ? await postBatch(urls[u], chunk) : await postSingles(urls[u], chunk)));
+      }
+      return out;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("no RPC answered");
+}
+
+// ---------------------------------------------------------------------------
+// Countdown
+// ---------------------------------------------------------------------------
+function tick() {
+  const left = Math.floor((CFG.deadlineMs - Date.now()) / 1000);
+  if (left <= 0) {
+    ["cd-d", "cd-h", "cd-m", "cd-s"].forEach((id) => ($(id).textContent = "00"));
+    $("cd-note").textContent = "The date in Blast's notice has passed. Assets stay withdrawable, but through the bridge contracts on Ethereum directly; see Blast's guide below.";
+    return;
+  }
+  $("cd-d").textContent = String(Math.floor(left / 86400));
+  $("cd-h").textContent = String(Math.floor((left % 86400) / 3600)).padStart(2, "0");
+  $("cd-m").textContent = String(Math.floor((left % 3600) / 60)).padStart(2, "0");
+  $("cd-s").textContent = String(left % 60).padStart(2, "0");
+}
+tick();
+setInterval(tick, 1000);
+
+// ---------------------------------------------------------------------------
+// Chain context: L1 gas, portal state, latest output, queue, prices, Blast head.
+// ---------------------------------------------------------------------------
+let ctxPromise = null, ctxAt = 0;
+function context() {
+  if (!ctxPromise || Date.now() - ctxAt > 60000) { ctxAt = Date.now(); ctxPromise = loadContext(); ctxPromise.catch(() => { ctxPromise = null; }); }
+  return ctxPromise;
+}
+async function loadContext() {
+  const ctx = { errors: [] };
+  const l1 = (async () => {
+    const [blk, fh, paused, latestIdx, finPeriod, lastFinReq] = await rpc(CFG.l1Rpcs, [
+      { method: "eth_getBlockByNumber", params: ["latest", false] },
+      { method: "eth_feeHistory", params: ["0x12c", "latest", []] },
+      call(CFG.portal, SEL.paused), call(CFG.oracle, SEL.latestIdx), call(CFG.oracle, SEL.finPeriod), call(CFG.queue, SEL.lastFinReq),
+    ]);
+    const [out] = await rpc(CFG.l1Rpcs, [call(CFG.oracle, SEL.getOutput + uarg(big(latestIdx)))]);
+    const fees = (fh?.baseFeePerGas || []).map(big).filter((x) => x > 0n).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    Object.assign(ctx, {
+      l1Now: Number(big(blk.timestamp)), baseFee: big(blk.baseFeePerGas),
+      hourMedian: fees.length ? fees[fees.length >> 1] : null, hourLow: fees.length ? fees[0] : null,
+      paused: big(paused) !== 0n, latestIdx: big(latestIdx), finPeriod: Number(big(finPeriod)), lastFinReq: big(lastFinReq),
+      latestOutputBlock: big(word(out, 2)), latestOutputTime: Number(big(word(out, 1))),
+    });
+  })().catch((e) => ctx.errors.push("Ethereum: " + e.message));
+  const l2 = rpc(CFG.blastRpcs, [{ method: "eth_getBlockByNumber", params: ["latest", false] }])
+    .then(([b]) => { ctx.blastBlock = Number(big(b.number)); ctx.blastTime = Number(big(b.timestamp)); })
+    .catch((e) => ctx.errors.push("Blast: " + e.message));
+  const prices = getJson("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,blast,usdb&vs_currencies=usd", 2)
+    .then((p) => { ctx.prices = { ethereum: p.ethereum?.usd, blast: p.blast?.usd, usdb: p.usdb?.usd }; })
+    .catch(async () => {
+      // Fallback for ETH: the deepest WETH pool on Blast (DexScreener).
+      try { ctx.prices = { ethereum: (await dexPrices([WETH])).get(WETH)?.usd, blast: null, usdb: null }; }
+      catch { ctx.prices = {}; ctx.errors.push("Prices unavailable right now"); }
+    });
+  await Promise.all([l1, l2, prices]);
+  ctx.gasPrice = ctx.baseFee != null ? ctx.baseFee + CFG.tipWei : null;
+  return ctx;
+}
+const costWei = (ctx, gas) => (ctx.gasPrice != null ? gas * ctx.gasPrice : null);
+const toUsd = (ctx, wei) => (wei != null && ctx.prices?.ethereum ? eth(wei) * ctx.prices.ethereum : null);
+
+async function dexPrices(addrs) {
+  const out = new Map();
+  for (let i = 0; i < addrs.length; i += 30) {
+    const pairs = await getJson(`https://api.dexscreener.com/tokens/v1/blast/${addrs.slice(i, i + 30).join(",")}`, 2);
+    for (const p of Array.isArray(pairs) ? pairs : []) {
+      const a = String(p.baseToken?.address || "").toLowerCase();
+      const liq = p.liquidity?.usd ?? 0;
+      if (!a || liq < CFG.minLiquidityUsd) continue;
+      if (!out.has(a) || liq > out.get(a).liq) out.set(a, { usd: Number(p.priceUsd) || 0, liq });
+    }
+  }
+  return out;
+}
+
+function renderLive(ctx) {
+  if (ctx.blastBlock) {
+    const age = Math.max(0, Math.round(Date.now() / 1000 - ctx.blastTime));
+    $("lv-blast").textContent = age < 120 ? "Running" : "Stalled?";
+    $("lv-blast-sub").textContent = `block ${ctx.blastBlock.toLocaleString("en-US")} · ${age < 120 ? age + "s ago" : fmtIn(age) + " ago"}`;
+  } else { $("lv-blast").textContent = "Not answering"; $("lv-blast-sub").textContent = "Blast RPC did not respond"; }
+  if (ctx.baseFee != null) {
+    $("lv-gas").textContent = `${gwei(ctx.baseFee)} gwei`;
+    $("lv-gas-sub").textContent = ctx.hourLow != null ? `last hour: low ${gwei(ctx.hourLow)}, median ${gwei(ctx.hourMedian)}` : "";
+    $("lv-delay").textContent = ctx.finPeriod ? `${(ctx.finPeriod / 3600).toLocaleString("en-US")} hours` : "?";
+    $("lv-delay-sub").textContent = ctx.paused ? "Portal is PAUSED on Ethereum" : "portal open · read from the L1 contract";
+    const claim = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
+    const usd = toUsd(ctx, claim);
+    $("lv-cost").textContent = usd != null ? fmtUsd(usd) : `${fmtAmt(eth(claim))} ETH`;
+    const lowUsd = ctx.hourLow != null ? toUsd(ctx, (CFG.proveGas + CFG.finalizeGas) * (ctx.hourLow + CFG.tipWei)) : null;
+    $("lv-cost-sub").textContent = lowUsd != null ? `prove + claim now · ${fmtUsd(lowUsd)} at the hour's low gas` : "prove + claim on Ethereum";
+  } else {
+    $("lv-gas").textContent = "Not answering"; $("lv-delay").textContent = "?"; $("lv-cost").textContent = "?";
+  }
+}
+context().then(renderLive).catch(() => {});
+setInterval(() => context().then(renderLive).catch(() => {}), 60000);
+
+// ---------------------------------------------------------------------------
+// One wallet
+// ---------------------------------------------------------------------------
+async function routescanHoldings(a) {
+  const items = [];
+  let url = `${CFG.routescan}/address/${a}/erc20-holdings?limit=100`;
+  for (let page = 0; url && page < 5; page++) {
+    const j = await getJson(url);
+    items.push(...(j.items || []));
+    const next = j.link?.next;
+    url = next ? (next.startsWith("http") ? next : `https://api.routescan.io${next}`) : null;
+  }
+  return items;
+}
+async function routescanBridgeTxs(a) {
+  const j = await getJson(`${CFG.routescan}/etherscan/api?module=account&action=txlist&address=${a}&page=1&offset=100&sort=desc`);
+  const list = Array.isArray(j.result) ? j.result : [];
+  return list.filter((t) => String(t.from).toLowerCase() === a && BRIDGES[String(t.to).toLowerCase()] && t.isError === "0").map((t) => {
+    const sel = t.input.slice(0, 10);
+    const w = (n) => t.input.slice(10 + 64 * n, 10 + 64 * (n + 1));
+    // bridgeERC20(localToken, remoteToken, amount, …) / bridgeERC20To(localToken, remoteToken, to, amount, …)
+    const token = sel === "0x87087623" || sel === "0x540abf73" ? ("0x" + w(0).slice(24)).toLowerCase() : null;
+    const amountRaw = sel === "0x87087623" ? BigInt("0x" + w(2)) : sel === "0x540abf73" ? BigInt("0x" + w(3)) : null;
+    return { hash: t.hash, time: Number(t.timeStamp), block: BigInt(t.blockNumber), token, amountRaw };
+  });
+}
+
+async function checkWallet(a) {
+  const ctx = await context();
+  const res = { address: a, errors: [...ctx.errors], tokens: [], unpriced: [], spam: 0, withdrawals: [] };
+
+  const [holdings, txs, base] = await Promise.all([
+    routescanHoldings(a).catch((e) => { res.errors.push("Token list: " + e.message); return []; }),
+    routescanBridgeTxs(a).catch((e) => { res.errors.push("Withdrawal history: " + e.message); return []; }),
+    rpc(CFG.blastRpcs, [
+      { method: "eth_getBalance", params: [a, "latest"] },
+      call(USDB, SEL.balanceOf + arg(a)), call(WETH, SEL.balanceOf + arg(a)), call(BLAST, SEL.balanceOf + arg(a)),
+    ]).catch((e) => { res.errors.push("Blast balances: " + e.message); return null; }),
+  ]);
+
+  // ---- balances on Blast ----
+  const p = ctx.prices || {};
+  if (base) {
+    const ethWei = big(base[0]);
+    if (ethWei > 0n) res.tokens.push({ symbol: "ETH", amount: eth(ethWei), usd: p.ethereum ? eth(ethWei) * p.ethereum : null, kind: "eth", withdrawable: true });
+    [[USDB, base[1]], [WETH, base[2]], [BLAST, base[3]]].forEach(([addr, raw]) => {
+      const v = big(raw);
+      if (v === 0n) return;
+      const m = TOKENS[addr], amount = units(v, m.decimals), price = p[m.cg];
+      res.tokens.push({ symbol: m.symbol, amount, usd: price != null ? amount * price : null, kind: m.symbol.toLowerCase(), withdrawable: addr !== BLAST });
+    });
+    res.ethWei = ethWei;
+  }
+  // Other ERC-20s: discovered by Routescan, re-read on-chain, priced only with real liquidity.
+  const others = holdings.filter((h) => !TOKENS[String(h.tokenAddress).toLowerCase()]);
+  const clean = [];
+  for (const h of others) {
+    const label = `${h.tokenSymbol || ""} ${h.tokenName || ""}`;
+    if (SPAM_RE.test(label)) res.spam++; else clean.push(h);
+  }
+  if (clean.length) {
+    try {
+      const raws = await rpc(CFG.blastRpcs, clean.map((h) => call(h.tokenAddress, SEL.balanceOf + arg(a))));
+      const priced = await dexPrices(clean.map((h) => String(h.tokenAddress).toLowerCase())).catch(() => new Map());
+      clean.forEach((h, i) => {
+        const v = big(raws[i]);
+        if (v === 0n) return;
+        const addr = String(h.tokenAddress).toLowerCase();
+        const amount = units(v, Number(h.tokenDecimals) || 0);
+        const pr = priced.get(addr);
+        const sym = String(h.tokenSymbol || addr.slice(0, 8)).slice(0, 24);
+        if (pr) res.tokens.push({ symbol: sym, amount, usd: amount * pr.usd, kind: "other", withdrawable: true });
+        else res.unpriced.push({ symbol: sym, amount });
+      });
+    } catch (e) { res.errors.push("Other tokens: " + e.message); }
+  }
+
+  // ---- withdrawals already started ----
+  if (txs.length) {
+    try {
+      const receipts = await rpc(CFG.blastRpcs, txs.map((t) => ({ method: "eth_getTransactionReceipt", params: [t.hash] })));
+      const ws = [];
+      txs.forEach((t, i) => {
+        const rc = receipts[i];
+        if (!rc || big(rc.status) !== 1n) return;
+        const log = (rc.logs || []).find((l) => String(l.address).toLowerCase() === CFG.passer && l.topics?.[0] === CFG.topicMessagePassed);
+        if (!log) return;
+        ws.push({ ...t, value: big(word(log.data, 0)), whash: word(log.data, 3) });
+      });
+      if (ws.length) {
+        const st = await rpc(CFG.l1Rpcs, ws.flatMap((w) => [call(CFG.portal, SEL.finalized + arg(w.whash)), call(CFG.portal, SEL.proven + arg(w.whash))]));
+        ws.forEach((w, i) => {
+          w.finalized = big(st[2 * i]) !== 0n;
+          const pw = st[2 * i + 1] || "0x";
+          w.provenAt = Number(big(word(pw, 1)));
+          w.provenIdx = big(word(pw, 2));
+          w.requestId = big(word(pw, 3));
+          w.provenRoot = word(pw, 0);
+        });
+        const proven = ws.filter((w) => !w.finalized && w.provenAt > 0);
+        if (proven.length) {
+          const outs = await rpc(CFG.l1Rpcs, proven.map((w) => call(CFG.oracle, SEL.getOutput + uarg(w.provenIdx))));
+          proven.forEach((w, i) => { w.outRoot = word(outs[i], 0); w.outTime = Number(big(word(outs[i], 1))); });
+        }
+        res.withdrawals = ws.map((w) => describeWithdrawal(w, ctx));
+      }
+    } catch (e) { res.errors.push("Withdrawal status: " + e.message); }
+  }
+  return res;
+}
+
+function describeWithdrawal(w, ctx) {
+  const p = ctx.prices || {};
+  let asset, amount, usd, extraGas = 0n;
+  if (w.value > 0n) { asset = "ETH"; amount = eth(w.value); usd = p.ethereum ? amount * p.ethereum : null; }
+  else if (w.token && TOKENS[w.token]) {
+    const m = TOKENS[w.token]; asset = m.symbol; amount = units(w.amountRaw ?? 0n, m.decimals);
+    const price = p[m.cg]; usd = price != null ? amount * price : null;
+    if (w.token === USDB) extraGas = CFG.usdbClaimGas;
+  } else { asset = w.token ? short(w.token) : "token"; amount = w.amountRaw != null ? Number(w.amountRaw) / 1e18 : null; usd = null; }
+
+  let status, tone, next, gasLeft;
+  const now = ctx.l1Now || Math.floor(Date.now() / 1000);
+  if (w.finalized) {
+    status = "Claimed"; tone = "ok"; gasLeft = 0n;
+    next = asset === "USDB" ? "Done on the bridge; DAI may still need its claim on the bridge page" : "Done. Funds went to this address on Ethereum";
+  } else if (w.provenAt > 0 && w.outRoot === w.provenRoot) {
+    const readyAt = Math.max(w.provenAt, w.outTime || 0) + (ctx.finPeriod || 86400);
+    gasLeft = CFG.finalizeGas + extraGas;
+    if (now < readyAt) { status = "Proven"; tone = "info"; next = `Claim opens ${fmtWhen(readyAt)} (in ${fmtIn(readyAt - Date.now() / 1000)})`; }
+    else if (w.value > 0n && ctx.lastFinReq != null && w.requestId > ctx.lastFinReq) { status = "In Blast's queue"; tone = "info"; next = "24 h done; waiting for Blast's daily withdrawal batch, then claim"; }
+    else { status = "Ready to claim"; tone = "ok"; next = "Claim on Ethereum (bridge page, Transactions)"; }
+  } else if (ctx.latestOutputBlock != null && ctx.latestOutputBlock < w.block) {
+    status = "Waiting"; tone = "none"; gasLeft = CFG.proveGas + CFG.finalizeGas + extraGas;
+    next = "Can be proven after the next checkpoint is posted to Ethereum (about an hour)";
+  } else {
+    status = "Ready to prove"; tone = "warn"; gasLeft = CFG.proveGas + CFG.finalizeGas + extraGas;
+    next = "Prove on Ethereum (bridge page, Transactions)";
+  }
+  const feeUsd = gasLeft ? toUsd(ctx, costWei(ctx, gasLeft)) : 0;
+  const worth = gasLeft === 0n ? null : usd == null || feeUsd == null ? undefined : usd > feeUsd;
+  return { time: w.time, hash: w.hash, asset, amount, usd, status, tone, next, feeUsd, worth };
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+function tokenAdvice(t, exitFeeUsd) {
+  if (t.usd != null && t.usd < 0.01) return "Worth less than a cent";
+  if (t.kind === "eth") return "Withdraw through the bridge";
+  if (t.kind === "weth") return "Unwrap to ETH on Blast, then withdraw";
+  if (t.kind === "usdb") return "Arrives on Ethereum as DAI after an extra claim, or swap to ETH on Blast first";
+  if (t.kind === "blast") return t.usd != null && exitFeeUsd != null && t.usd < exitFeeUsd ? "Bridging costs more than it is worth" : "Can be bridged; Ethereum fees apply";
+  return "Swap to ETH on a Blast exchange, then withdraw the ETH";
+}
+const unpricedAdvice = (sym) => /^[aw]WETH$/i.test(sym) || /^a[A-Z]/.test(sym)
+  ? "Lending receipt; withdraw it in the app that issued it"
+  : "No Blast market with real liquidity found";
+function walletCard(res, ctx) {
+  const exitFeeWei = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
+  const exitFeeUsd = toUsd(ctx, exitFeeWei);
+  const withdrawable = res.tokens.filter((t) => t.withdrawable && t.usd != null).reduce((s, t) => s + t.usd, 0);
+  const allValue = res.tokens.reduce((s, t) => s + (t.usd || 0), 0);
+  const nothing = !res.tokens.length && !res.unpriced.length && !res.withdrawals.length;
+
+  let pill;
+  if (nothing && !res.errors.length) pill = `<span class="pill none">Nothing on Blast</span>`;
+  else if (!res.tokens.length) pill = `<span class="pill none">No balance left on Blast</span>`;
+  else if (exitFeeUsd == null) pill = `<span class="pill none">Fees unknown right now</span>`;
+  else if (withdrawable > exitFeeUsd * 1.1) pill = `<span class="pill ok">Worth withdrawing</span>`;
+  else if (withdrawable > 0) pill = `<span class="pill bad">Fees exceed the value</span>`;
+  else pill = `<span class="pill none">Nothing worth withdrawing</span>`;
+
+  const finishable = res.withdrawals.filter((w) => w.worth === true).length;
+  if (finishable) pill += ` <span class="pill warn">${finishable} withdrawal${finishable > 1 ? "s" : ""} worth finishing</span>`;
+  const keep = exitFeeUsd != null ? Math.max(0, withdrawable - exitFeeUsd) : null;
+  const ethLow = res.ethWei != null && res.ethWei === 0n && res.tokens.length > 0;
+
+  const rows = res.tokens.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((t) => `
+    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd))}</span></td></tr>`).join("");
+  const unpriced = res.unpriced.map((t) => `
+    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">?</td><td><span class="note">${esc(unpricedAdvice(t.symbol))}</span></td></tr>`).join("");
+  const board = res.withdrawals.map((w) => `
+    <tr>
+      <td class="when">${esc(fmtWhen(w.time))}</td>
+      <td class="mono">${w.amount != null ? fmtAmt(w.amount) : "?"} ${esc(w.asset)}</td>
+      <td class="status"><span class="pill ${w.tone}">${esc(w.status)}</span></td>
+      <td>${esc(w.next)}</td>
+      <td>${w.worth === null ? `<span class="note">Done</span>` : w.worth === undefined ? `<span class="note">Price unknown</span>`
+        : `<span class="pill ${w.worth ? "ok" : "bad"}">${w.worth ? "Yes" : "No"}</span> <span class="note">${fmtUsd(w.usd)} vs ${fmtUsd(w.feeUsd)} fees</span>`}</td>
+    </tr>`).join("");
+
+  return `
+  <article class="wallet">
+    <header class="wallet-head">
+      <div class="wallet-id">
+        <span class="mono" title="${esc(res.address)}">${esc(short(res.address))}</span>
+        <a href="https://blastscan.io/address/${esc(res.address)}" target="_blank" rel="noopener noreferrer">Blastscan</a>
+        <button class="ghost" type="button" data-copy="${esc(res.address)}">Copy</button>
+      </div>
+      <div class="row">${pill}</div>
+    </header>
+    ${res.errors.length ? `<div class="err-box">Some data could not be read, so this result may be incomplete: ${esc(res.errors.join(" · "))}. Try again in a minute.</div>` : ""}
+    ${nothing ? `<p class="empty">No balance and no bridge withdrawals found for this address on Blast.</p>` : `
+    <div class="sum">
+      <div><b>${fmtUsd(allValue)}</b><span>Still on Blast</span></div>
+      <div><b>${exitFeeUsd != null ? fmtUsd(exitFeeUsd) : "?"}</b><span>Fees to withdraw it now</span></div>
+      <div><b>${keep != null ? fmtUsd(keep) : "?"}</b><span>You would keep</span></div>
+    </div>`}
+    ${res.tokens.length || res.unpriced.length ? `
+    <h3>On Blast now</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th></tr></thead>
+      <tbody>${rows}${unpriced}</tbody>
+    </table></div>
+    ${ethLow ? `<p class="small muted">This wallet has no ETH on Blast. It needs a little ETH there to pay gas for any withdrawal or swap.</p>` : ""}` : ""}
+    ${res.spam ? `<details class="spam"><summary>${res.spam} spam airdrop token${res.spam > 1 ? "s" : ""} hidden</summary><p>Scammers send worthless tokens whose names point to fake "claim" sites. They are not shown here on purpose. Do not trade, approve or visit anything named in them.</p></details>` : ""}
+    ${res.withdrawals.length ? `
+    <h3>Withdrawals already started</h3>
+    <div class="table-wrap board"><table>
+      <thead><tr><th>Started</th><th>Amount</th><th>Status</th><th>Next step</th><th>Worth finishing?</th></tr></thead>
+      <tbody>${board}</tbody>
+    </table></div>` : ""}
+  </article>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-copy]");
+  if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
+  catch { b.textContent = b.dataset.copy; }
+  setTimeout(() => (b.textContent = "Copy"), 1500);
+});
+
+$("check-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const found = [...new Set(($("addrs").value.match(/0x[0-9a-fA-F]{40}/g) || []).map((a) => a.toLowerCase()))];
+  const msg = $("form-msg");
+  msg.className = "form-msg";
+  if (!found.length) { msg.className = "form-msg err"; msg.textContent = "Paste a wallet address: 0x followed by 40 letters or digits."; return; }
+  const list = found.slice(0, CFG.maxWallets);
+  msg.textContent = found.length > list.length ? `Checking the first ${list.length} of ${found.length} addresses…` : `Checking ${list.length} address${list.length > 1 ? "es" : ""}…`;
+  const btn = $("check-btn");
+  btn.disabled = true;
+  const box = $("results");
+  box.innerHTML = list.map((a, i) => `<article class="wallet" id="w-${i}"><p class="skeleton">${esc(short(a))} · reading Blast and Ethereum…</p></article>`).join("");
+  let done = 0;
+  try {
+    const ctx = await context();
+    renderLive(ctx);
+    await pool(list, 2, async (a, i) => {
+      let html;
+      try { html = walletCard(await checkWallet(a), await context()); }
+      catch (err) { html = `<article class="wallet"><p class="err-box">${esc(short(a))}: could not check (${esc(err.message)}). Try again in a minute.</p></article>`; }
+      $(`w-${i}`).outerHTML = html;
+      done++;
+      msg.textContent = done < list.length ? `Checked ${done} of ${list.length}…` : `Checked ${list.length} address${list.length > 1 ? "es" : ""} at ${new Date().toLocaleTimeString()}.`;
+    });
+  } finally { btn.disabled = false; }
+});
+</script>
+</body>
+</html>
