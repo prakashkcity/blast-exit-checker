@@ -138,6 +138,8 @@ button.ghost { appearance: none; border: 1px solid var(--line); background: tran
 .sum div { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; display: grid; }
 .sum b { font-family: var(--font-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .sum span { font-size: 0.8rem; color: var(--muted); }
+.sum .short { border-left-color: var(--bad); }
+.sum .short span { color: var(--bad); font-weight: 700; }
 .pill { display: inline-block; border-radius: 999px; padding: 3px 11px 2px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
 .pill.ok { color: var(--ok); background: var(--ok-bg); }
 .pill.warn { color: var(--warn); background: var(--warn-bg); }
@@ -250,12 +252,13 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
         <span class="example-tag">Example output, not a real wallet</span>
         <header class="wallet-head">
           <div class="wallet-id"><span class="mono">0x1234…abcd</span><span class="small muted">Blastscan · Copy</span></div>
-          <span class="pill ok">Worth withdrawing</span>
+          <div class="row"><span class="pill ok">Worth withdrawing</span> <span class="pill warn">In apps: $4.90</span> <span class="pill info">2 NFTs</span></div>
         </header>
         <div class="sum">
-          <div><b>$41.20</b><span>Still on Blast</span></div>
+          <div><b>$46.10</b><span>Still on Blast</span></div>
           <div><b>$0.31</b><span>Fees to withdraw it now</span></div>
-          <div><b>$40.89</b><span>You would keep</span></div>
+          <div><b>$45.79</b><span>You would keep</span></div>
+          <div><b>$2.10</b><span>ETH on Ethereum, enough for these fees</span></div>
         </div>
         <h3>On Blast now</h3>
         <div class="table-wrap"><table>
@@ -264,6 +267,20 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
             <tr><td>ETH</td><td class="num">0.0142</td><td class="num">$33.20</td><td><span class="note">Withdraw through the bridge</span></td></tr>
             <tr><td>USDB</td><td class="num">8.00</td><td class="num">$7.98</td><td><span class="note">Arrives on Ethereum as DAI after an extra claim, or swap to ETH on Blast first</span></td></tr>
             <tr><td>BLAST</td><td class="num">300.00</td><td class="num">$0.02</td><td><span class="note">Bridging costs more than it is worth</span></td></tr>
+          </tbody>
+        </table></div>
+        <h3>Deposits in apps</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Receipt</th><th>What it holds</th><th class="num">Value</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td>aWETH <span class="note">Example Lending WETH</span></td><td class="mono">0.0021 WETH</td><td class="num">$4.90</td><td><span class="note">Withdraw it in the lending app, then bridge</span></td></tr>
+          </tbody>
+        </table></div>
+        <h3>NFTs on Blast</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Collection</th><th class="num">Count</th><th>Token IDs</th><th>Market</th></tr></thead>
+          <tbody>
+            <tr><td>Example Collection <span class="note">ERC-721</span></td><td class="num">2</td><td class="mono">#101, #102</td><td><span class="note">OpenSea</span></td></tr>
           </tbody>
         </table></div>
         <h3>Withdrawals already started</h3>
@@ -315,7 +332,10 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
         <li><b>Fees:</b> one withdrawal needs two Ethereum transactions. Proving takes about 430,000 gas and claiming about 240,000 gas, the medians of recent transactions on the Blast portal contract. The page multiplies these by the current Ethereum gas price.</li>
         <li><b>Worth it?</b> "Yes" means the value is higher than the Ethereum fees still to pay. Ethereum gas changes by the minute, so a "No" can turn into a "Yes" when gas is cheaper.</li>
         <li><b>Prices:</b> ETH, USDB and BLAST from CoinGecko; other tokens from DexScreener, and only if a Blast pool holds at least $1,000 of liquidity.</li>
-        <li><b>Spam tokens</b> that scammers airdropped are counted but hidden. Never interact with them or visit sites named in them.</li>
+        <li><b>Deposits in apps:</b> lending receipts (Aave-style) count 1:1 with the token they hold, vault shares (ERC-4626) are converted by the vault itself, and v2 liquidity tokens by their share of the pool. Concentrated-liquidity positions are listed without a value.</li>
+        <li><b>NFTs</b> cannot go through the official bridge. This page lists them but cannot see offers; a floor price is only the cheapest listing.</li>
+        <li><b>ETH on Ethereum</b> is what this address holds there to pay for prove and claim.</li>
+        <li><b>Spam tokens and NFTs</b> that scammers airdropped are counted but hidden. Never interact with them or visit sites named in them.</li>
         <li>Withdrawal history covers the address's latest 100 transactions on Blast.</li>
       </ul>
     </div>
@@ -325,7 +345,7 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
       <ul class="plain small">
         <li><code>rpc.blast.io</code>, <code>blast-rpc.publicnode.com</code>: Blast balances and transactions</li>
         <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): withdrawal status on Ethereum, gas price</li>
-        <li><code>api.routescan.io</code>: which tokens an address holds, transaction history</li>
+        <li><code>api.routescan.io</code>: which tokens and NFTs an address holds, transaction history</li>
         <li><code>api.coingecko.com</code>, <code>api.dexscreener.com</code>: prices (no address sent)</li>
       </ul>
       <p class="small muted">Only read requests are made (balances, contract reads, receipts). Open your browser's developer tools, Network tab, to watch every request, or view the page source; it is one file.</p>
@@ -377,6 +397,10 @@ const BRIDGES = {
 const SEL = {
   proven: "0xe965084c", finalized: "0xa14238e7", latestIdx: "0x69f16eec", getOutput: "0xa25ae557",
   finPeriod: "0xf4daa291", lastFinReq: "0x4f069a13", paused: "0x5c975abb", balanceOf: "0x70a08231",
+  // Deposit receipts: Aave-style lending, ERC-4626 vaults, Uniswap-v2-style LP.
+  underlying: "0xb16a19de", asset: "0x38d52e0f", convertToAssets: "0x07a2d13a",
+  token0: "0x0dfe1681", token1: "0xd21220a7", getReserves: "0x0902f1ac", totalSupply: "0x18160ddd",
+  decimals: "0x313ce567", symbol: "0x95d89b41", name: "0x06fdde03",
 };
 const SPAM_RE = /https?:|www\.|\.com\b|\.xyz|\.net\b|\.org\b|\.io\b|\.pro\b|\.app\b|t\.me|t\.ly|claim|visit|reward|airdrop|voucher|bonus|\[|!|\$\s/i;
 
@@ -391,6 +415,21 @@ const arg = (h) => strip(h).toLowerCase().padStart(64, "0");
 const uarg = (n) => BigInt(n).toString(16).padStart(64, "0");
 const word = (h, i) => "0x" + strip(h).slice(64 * i, 64 * (i + 1));
 const big = (h) => (h && h !== "0x" ? BigInt(h) : 0n);
+// A 32-byte return word holding an address, or null (revert, empty, zero, or not an address).
+function addrOf(h) {
+  if (!h || h.length < 66 || !/^0x0{24}$/.test(h.slice(0, 26))) return null;
+  const a = "0x" + h.slice(26, 66).toLowerCase();
+  return /^0x0{40}$/.test(a) ? null : a;
+}
+const utf8 = (hex) => new TextDecoder().decode(new Uint8Array((hex.match(/../g) || []).map((b) => parseInt(b, 16))));
+// An ABI string, or the bytes32 form a few old tokens return.
+function strOf(h) {
+  try {
+    const s = strip(h || "");
+    if (s.length === 64) return utf8(s).replace(/\0+$/, "");
+    return utf8(s.slice(128, 128 + parseInt(s.slice(64, 128), 16) * 2));
+  } catch { return ""; }
+}
 const call = (to, data) => ({ method: "eth_call", params: [{ to, data }, "latest"] });
 const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
 const units = (raw, dec) => Number(raw) / 10 ** dec;
@@ -529,29 +568,51 @@ async function loadContext() {
   const l2 = rpc(CFG.blastRpcs, [{ method: "eth_getBlockByNumber", params: ["latest", false] }])
     .then(([b]) => { ctx.blastBlock = Number(big(b.number)); ctx.blastTime = Number(big(b.timestamp)); })
     .catch((e) => ctx.errors.push("Blast: " + e.message));
-  const prices = getJson("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,blast,usdb&vs_currencies=usd", 2)
-    .then((p) => { ctx.prices = { ethereum: p.ethereum?.usd, blast: p.blast?.usd, usdb: p.usdb?.usd }; })
-    .catch(async () => {
-      // Fallback for ETH: the deepest WETH pool on Blast (DexScreener).
-      try { ctx.prices = { ethereum: (await dexPrices([WETH])).get(WETH)?.usd, blast: null, usdb: null }; }
-      catch { ctx.prices = {}; ctx.errors.push("Prices unavailable right now"); }
-    });
+  const prices = loadPrices().then((v) => {
+    ctx.prices = v;
+    if (v.ethereum == null) ctx.errors.push("Prices unavailable right now");
+  });
   await Promise.all([l1, l2, prices]);
   ctx.gasPrice = ctx.baseFee != null ? ctx.baseFee + CFG.tipWei : null;
   return ctx;
 }
+// Prices change slowly next to gas, so they are fetched at most every 5 minutes. CoinGecko's
+// keyless API rate-limits (its 429 carries no CORS header, so it shows as a CORS error); the
+// fallback is the deepest Blast pool for each token on DexScreener.
+let priceCache = null;
+async function loadPrices() {
+  if (priceCache && Date.now() - priceCache.at < 300000) return priceCache.v;
+  let v;
+  try {
+    const p = await getJson("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,blast,usdb&vs_currencies=usd", 2);
+    v = { ethereum: p.ethereum?.usd, blast: p.blast?.usd, usdb: p.usdb?.usd };
+    if (v.ethereum == null) throw new Error("no ETH price");
+  } catch {
+    const d = await dexPrices([WETH, USDB, BLAST]).catch(() => new Map());
+    v = { ethereum: d.get(WETH)?.usd, usdb: d.get(USDB)?.usd, blast: d.get(BLAST)?.usd };
+  }
+  if (v.ethereum != null) priceCache = { at: Date.now(), v };
+  return v;
+}
 const costWei = (ctx, gas) => (ctx.gasPrice != null ? gas * ctx.gasPrice : null);
 const toUsd = (ctx, wei) => (wei != null && ctx.prices?.ethereum ? eth(wei) * ctx.prices.ethereum : null);
 
+// USD price per token from its deepest Blast pool. A token can sit on either side of a pair:
+// priceUsd prices the base token, and priceNative is the base in quote units, so the quote
+// token's price is priceUsd / priceNative (most WETH pools list WETH as the quote).
 async function dexPrices(addrs) {
   const out = new Map();
+  const want = new Set(addrs.map((x) => x.toLowerCase()));
+  const put = (a, usd, liq) => { if (usd > 0 && isFinite(usd) && (!out.has(a) || liq > out.get(a).liq)) out.set(a, { usd, liq }); };
   for (let i = 0; i < addrs.length; i += 30) {
     const pairs = await getJson(`https://api.dexscreener.com/tokens/v1/blast/${addrs.slice(i, i + 30).join(",")}`, 2);
     for (const p of Array.isArray(pairs) ? pairs : []) {
-      const a = String(p.baseToken?.address || "").toLowerCase();
       const liq = p.liquidity?.usd ?? 0;
-      if (!a || liq < CFG.minLiquidityUsd) continue;
-      if (!out.has(a) || liq > out.get(a).liq) out.set(a, { usd: Number(p.priceUsd) || 0, liq });
+      if (liq < CFG.minLiquidityUsd) continue;
+      const base = String(p.baseToken?.address || "").toLowerCase(), quote = String(p.quoteToken?.address || "").toLowerCase();
+      const pu = Number(p.priceUsd), pn = Number(p.priceNative);
+      if (want.has(base)) put(base, pu, liq);
+      if (want.has(quote) && pn > 0) put(quote, pu / pn, liq);
     }
   }
   return out;
@@ -583,19 +644,39 @@ setInterval(() => context().then(renderLive).catch(() => {}), 60000);
 // ---------------------------------------------------------------------------
 // One wallet
 // ---------------------------------------------------------------------------
-async function routescanHoldings(a) {
+// Routescan's free API answers 429 to bursts, so at most 3 of its requests are in flight.
+let rsActive = 0;
+const rsQueue = [];
+async function rsGet(url) {
+  if (rsActive >= 3) await new Promise((r) => rsQueue.push(r));
+  rsActive++;
+  try { return await getJson(url); }
+  finally { rsActive--; rsQueue.shift()?.(); }
+}
+async function rsPages(url, maxPages = 5) {
   const items = [];
-  let url = `${CFG.routescan}/address/${a}/erc20-holdings?limit=100`;
-  for (let page = 0; url && page < 5; page++) {
-    const j = await getJson(url);
+  for (let page = 0; url && page < maxPages; page++) {
+    const j = await rsGet(url);
     items.push(...(j.items || []));
     const next = j.link?.next;
     url = next ? (next.startsWith("http") ? next : `https://api.routescan.io${next}`) : null;
   }
   return items;
 }
+const routescanHoldings = (a) => rsPages(`${CFG.routescan}/address/${a}/erc20-holdings?limit=100`);
+// ERC-721 items carry a collection name; ERC-1155 items carry only contract, id and balance.
+async function routescanNfts(a) {
+  const [n721, n1155] = await Promise.all([
+    rsPages(`${CFG.routescan}/address/${a}/erc721-holdings?limit=100`),
+    rsPages(`${CFG.routescan}/address/${a}/erc1155-holdings?limit=100`),
+  ]);
+  return [
+    ...n721.map((it) => ({ kind: "ERC-721", contract: String(it.tokenAddress).toLowerCase(), tokenId: String(it.tokenId), name: String(it.collectionName || ""), qty: 1 })),
+    ...n1155.map((it) => ({ kind: "ERC-1155", contract: String(it.tokenAddress).toLowerCase(), tokenId: String(it.tokenId), name: "", qty: Number(it.balance) || 1 })),
+  ];
+}
 async function routescanBridgeTxs(a) {
-  const j = await getJson(`${CFG.routescan}/etherscan/api?module=account&action=txlist&address=${a}&page=1&offset=100&sort=desc`);
+  const j = await rsGet(`${CFG.routescan}/etherscan/api?module=account&action=txlist&address=${a}&page=1&offset=100&sort=desc`);
   const list = Array.isArray(j.result) ? j.result : [];
   return list.filter((t) => String(t.from).toLowerCase() === a && BRIDGES[String(t.to).toLowerCase()] && t.isError === "0").map((t) => {
     const sel = t.input.slice(0, 10);
@@ -609,16 +690,20 @@ async function routescanBridgeTxs(a) {
 
 async function checkWallet(a) {
   const ctx = await context();
-  const res = { address: a, errors: [...ctx.errors], tokens: [], unpriced: [], spam: 0, withdrawals: [] };
+  const res = { address: a, errors: [...ctx.errors], tokens: [], unpriced: [], deposits: [], nfts: [], spam: 0, nftSpam: 0, withdrawals: [], l1Wei: null };
 
-  const [holdings, txs, base] = await Promise.all([
+  const [holdings, txs, base, nftItems, l1Wei] = await Promise.all([
     routescanHoldings(a).catch((e) => { res.errors.push("Token list: " + e.message); return []; }),
     routescanBridgeTxs(a).catch((e) => { res.errors.push("Withdrawal history: " + e.message); return []; }),
     rpc(CFG.blastRpcs, [
       { method: "eth_getBalance", params: [a, "latest"] },
       call(USDB, SEL.balanceOf + arg(a)), call(WETH, SEL.balanceOf + arg(a)), call(BLAST, SEL.balanceOf + arg(a)),
     ]).catch((e) => { res.errors.push("Blast balances: " + e.message); return null; }),
+    routescanNfts(a).catch((e) => { res.errors.push("NFTs: " + e.message); return []; }),
+    // ETH on Ethereum pays for prove + claim.
+    rpc(CFG.l1Rpcs, [{ method: "eth_getBalance", params: [a, "latest"] }]).then(([b]) => big(b)).catch(() => null),
   ]);
+  res.l1Wei = l1Wei;
 
   // ---- balances on Blast ----
   const p = ctx.prices || {};
@@ -633,7 +718,8 @@ async function checkWallet(a) {
     });
     res.ethWei = ethWei;
   }
-  // Other ERC-20s: discovered by Routescan, re-read on-chain, priced only with real liquidity.
+  // Other ERC-20s: discovered by Routescan and re-read on-chain. Deposit receipts are valued
+  // through what they hold; plain tokens are priced only where a pool has real liquidity.
   const others = holdings.filter((h) => !TOKENS[String(h.tokenAddress).toLowerCase()]);
   const clean = [];
   for (const h of others) {
@@ -643,19 +729,34 @@ async function checkWallet(a) {
   if (clean.length) {
     try {
       const raws = await rpc(CFG.blastRpcs, clean.map((h) => call(h.tokenAddress, SEL.balanceOf + arg(a))));
-      const priced = await dexPrices(clean.map((h) => String(h.tokenAddress).toLowerCase())).catch(() => new Map());
-      clean.forEach((h, i) => {
-        const v = big(raws[i]);
-        if (v === 0n) return;
-        const addr = String(h.tokenAddress).toLowerCase();
-        const amount = units(v, Number(h.tokenDecimals) || 0);
-        const pr = priced.get(addr);
-        const sym = String(h.tokenSymbol || addr.slice(0, 8)).slice(0, 24);
-        if (pr) res.tokens.push({ symbol: sym, amount, usd: amount * pr.usd, kind: "other", withdrawable: true });
-        else res.unpriced.push({ symbol: sym, amount });
-      });
+      const held = clean.map((h, i) => ({
+        addr: String(h.tokenAddress).toLowerCase(), v: big(raws[i]), dec: Number(h.tokenDecimals) || 0,
+        sym: String(h.tokenSymbol || "").slice(0, 24), name: String(h.tokenName || "").slice(0, 48),
+      })).filter((x) => x.v > 0n);
+      await classifyTokens(held, res, p);
     } catch (e) { res.errors.push("Other tokens: " + e.message); }
   }
+
+  // ---- NFTs (the official bridge does not move them) ----
+  const groups = new Map();
+  for (const n of nftItems) {
+    const g = groups.get(n.contract) || { contract: n.contract, name: n.name, kind: n.kind, count: 0, ids: [] };
+    g.count += n.qty;
+    if (g.ids.length < 3) g.ids.push(n.tokenId);
+    groups.set(n.contract, g);
+  }
+  const unnamed = [...groups.values()].filter((g) => !g.name);
+  if (unnamed.length) {
+    const names = await rpc(CFG.blastRpcs, unnamed.map((g) => call(g.contract, SEL.name))).catch(() => []);
+    unnamed.forEach((g, i) => { g.name = strOf(names[i]).slice(0, 48); });
+  }
+  for (const g of groups.values()) {
+    if (SPAM_RE.test(g.name)) { res.nftSpam += g.count; continue; }
+    // Concentrated-liquidity positions (Uniswap v3 style) are NFTs; they hold tokens.
+    if (/position/i.test(g.name)) { res.deposits.push({ symbol: g.name, name: `${g.count} position${g.count > 1 ? "s" : ""}`, kind: "position", holds: "Liquidity position", usd: null }); continue; }
+    res.nfts.push(g);
+  }
+  res.nfts.sort((x, y) => y.count - x.count);
 
   // ---- withdrawals already started ----
   if (txs.length) {
@@ -691,6 +792,75 @@ async function checkWallet(a) {
   return res;
 }
 
+// Sort held ERC-20s into deposit receipts and plain tokens, then value both.
+//   lending: Aave-style aToken, UNDERLYING_ASSET_ADDRESS(), 1:1 with the underlying
+//            (a name or symbol with "debt" is money owed, not money held)
+//   vault:   ERC-4626, asset() + convertToAssets(balance)
+//   lp:      Uniswap-v2-style pair, token0/token1/getReserves/totalSupply → pool share
+async function classifyTokens(held, res, p) {
+  if (!held.length) return;
+  const probes = [SEL.underlying, SEL.asset, SEL.token0, SEL.token1, SEL.getReserves, SEL.totalSupply];
+  const pr = await rpc(CFG.blastRpcs, held.flatMap((x) => probes.map((s) => call(x.addr, s))));
+  held.forEach((x, i) => {
+    const r = pr.slice(i * probes.length, (i + 1) * probes.length);
+    const under = addrOf(r[0]), asset = addrOf(r[1]), t0 = addrOf(r[2]), t1 = addrOf(r[3]);
+    const reserves = r[4] && strip(r[4]).length >= 128 ? [big(word(r[4], 0)), big(word(r[4], 1))] : null;
+    const supply = big(r[5]);
+    if (under) { x.kind = /debt/i.test(`${x.sym} ${x.name}`) ? "debt" : "lending"; x.under = under; }
+    else if (asset) { x.kind = "vault"; x.under = asset; }
+    else if (t0 && t1 && reserves && supply > 0n) { x.kind = "lp"; Object.assign(x, { t0, t1, reserves, supply }); }
+    else x.kind = "plain";
+  });
+
+  // What the receipts hold: vault shares → assets; decimals + symbol of every underlying token.
+  const vaults = held.filter((x) => x.kind === "vault");
+  const unders = [...new Set(held.flatMap((x) => (x.kind === "lp" ? [x.t0, x.t1] : x.under ? [x.under] : [])))];
+  const info = new Map(Object.entries(TOKENS).map(([addr, m]) => [addr, { dec: m.decimals, sym: m.symbol }]));
+  const need = unders.filter((u) => !info.has(u));
+  if (vaults.length || need.length) {
+    const r2 = await rpc(CFG.blastRpcs, [
+      ...vaults.map((x) => call(x.addr, SEL.convertToAssets + uarg(x.v))),
+      ...need.flatMap((u) => [call(u, SEL.decimals), call(u, SEL.symbol)]),
+    ]);
+    vaults.forEach((x, i) => { x.assets = big(r2[i]); });
+    need.forEach((u, i) => {
+      const d = r2[vaults.length + 2 * i], s = r2[vaults.length + 2 * i + 1];
+      info.set(u, { dec: d ? Number(big(d)) : 18, sym: (strOf(s) || short(u)).slice(0, 16) });
+    });
+  }
+
+  // Prices: ETH/USDB/BLAST from CoinGecko; anything else from DexScreener, real liquidity only.
+  const known = new Map([[WETH, p.ethereum], [USDB, p.usdb], [BLAST, p.blast]]);
+  const lookups = [...new Set([...held.filter((x) => x.kind === "plain").map((x) => x.addr), ...unders.filter((u) => !known.has(u))])];
+  const dex = lookups.length ? await dexPrices(lookups).catch(() => new Map()) : new Map();
+  const usdOf = (token, amount) => { const px = known.get(token) ?? dex.get(token)?.usd; return px != null ? amount * px : null; };
+
+  for (const x of held) {
+    const symbol = x.sym || short(x.addr);
+    if (x.kind === "plain") {
+      const amount = units(x.v, x.dec), usd = usdOf(x.addr, amount);
+      if (usd != null) res.tokens.push({ symbol, amount, usd, kind: "other", withdrawable: true });
+      else res.unpriced.push({ symbol, amount });
+      continue;
+    }
+    let holds, usd;
+    if (x.kind === "lp") {
+      const i0 = info.get(x.t0), i1 = info.get(x.t1);
+      const a0 = units((x.reserves[0] * x.v) / x.supply, i0.dec), a1 = units((x.reserves[1] * x.v) / x.supply, i1.dec);
+      const u0 = usdOf(x.t0, a0), u1 = usdOf(x.t1, a1);
+      // A v2 pool holds equal value on both sides, so one priced side is enough.
+      usd = u0 != null && u1 != null ? u0 + u1 : u0 != null ? 2 * u0 : u1 != null ? 2 * u1 : null;
+      holds = `${fmtAmt(a0)} ${i0.sym} + ${fmtAmt(a1)} ${i1.sym}`;
+    } else {
+      const iu = info.get(x.under);
+      const amount = x.kind === "vault" ? units(x.assets ?? 0n, iu.dec) : units(x.v, x.dec);
+      usd = usdOf(x.under, amount);
+      holds = `${fmtAmt(amount)} ${iu.sym}`;
+    }
+    res.deposits.push({ symbol, name: x.name, kind: x.kind, holds, usd });
+  }
+}
+
 function describeWithdrawal(w, ctx) {
   const p = ctx.prices || {};
   let asset, amount, usd, extraGas = 0n;
@@ -719,9 +889,10 @@ function describeWithdrawal(w, ctx) {
     status = "Ready to prove"; tone = "warn"; gasLeft = CFG.proveGas + CFG.finalizeGas + extraGas;
     next = "Prove on Ethereum (bridge page, Transactions)";
   }
-  const feeUsd = gasLeft ? toUsd(ctx, costWei(ctx, gasLeft)) : 0;
+  const feeWei = gasLeft ? costWei(ctx, gasLeft) : 0n;
+  const feeUsd = gasLeft ? toUsd(ctx, feeWei) : 0;
   const worth = gasLeft === 0n ? null : usd == null || feeUsd == null ? undefined : usd > feeUsd;
-  return { time: w.time, hash: w.hash, asset, amount, usd, status, tone, next, feeUsd, worth };
+  return { time: w.time, hash: w.hash, asset, amount, usd, status, tone, next, feeWei, feeUsd, worth };
 }
 
 // ---------------------------------------------------------------------------
@@ -741,22 +912,55 @@ const unpricedAdvice = (sym) => /^[aw]WETH$/i.test(sym) || /^a[A-Z]/.test(sym)
 function walletCard(res, ctx) {
   const exitFeeWei = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
   const exitFeeUsd = toUsd(ctx, exitFeeWei);
-  const withdrawable = res.tokens.filter((t) => t.withdrawable && t.usd != null).reduce((s, t) => s + t.usd, 0);
-  const allValue = res.tokens.reduce((s, t) => s + (t.usd || 0), 0);
-  const nothing = !res.tokens.length && !res.unpriced.length && !res.withdrawals.length;
+  // Deposits come out once withdrawn in their app, so they count toward what can be withdrawn.
+  const depositUsd = res.deposits.filter((d) => d.kind !== "debt" && d.usd != null).reduce((s, d) => s + d.usd, 0);
+  const withdrawable = res.tokens.filter((t) => t.withdrawable && t.usd != null).reduce((s, t) => s + t.usd, 0) + depositUsd;
+  const allValue = res.tokens.reduce((s, t) => s + (t.usd || 0), 0) + depositUsd;
+  const nftCount = res.nfts.reduce((s, g) => s + g.count, 0);
+  const nothing = !res.tokens.length && !res.unpriced.length && !res.withdrawals.length && !res.deposits.length && !nftCount;
 
   let pill;
   if (nothing && !res.errors.length) pill = `<span class="pill none">Nothing on Blast</span>`;
-  else if (!res.tokens.length) pill = `<span class="pill none">No balance left on Blast</span>`;
+  else if (!res.tokens.length && !res.deposits.length) pill = `<span class="pill none">No balance left on Blast</span>`;
   else if (exitFeeUsd == null) pill = `<span class="pill none">Fees unknown right now</span>`;
   else if (withdrawable > exitFeeUsd * 1.1) pill = `<span class="pill ok">Worth withdrawing</span>`;
   else if (withdrawable > 0) pill = `<span class="pill bad">Fees exceed the value</span>`;
   else pill = `<span class="pill none">Nothing worth withdrawing</span>`;
 
-  const finishable = res.withdrawals.filter((w) => w.worth === true).length;
-  if (finishable) pill += ` <span class="pill warn">${finishable} withdrawal${finishable > 1 ? "s" : ""} worth finishing</span>`;
+  const finishable = res.withdrawals.filter((w) => w.worth === true);
+  if (finishable.length) pill += ` <span class="pill warn">${finishable.length} withdrawal${finishable.length > 1 ? "s" : ""} worth finishing</span>`;
+  if (depositUsd >= 0.5) pill += ` <span class="pill warn">In apps: ${fmtUsd(depositUsd)}</span>`;
+  if (nftCount) pill += ` <span class="pill info">${nftCount} NFT${nftCount > 1 ? "s" : ""}</span>`;
   const keep = exitFeeUsd != null ? Math.max(0, withdrawable - exitFeeUsd) : null;
-  const ethLow = res.ethWei != null && res.ethWei === 0n && res.tokens.length > 0;
+  const ethLow = res.ethWei != null && res.ethWei === 0n && (res.tokens.length > 0 || res.deposits.length > 0);
+
+  // ETH on Ethereum vs the prove + claim fees this wallet would pay: the withdrawals worth
+  // finishing, plus one new withdrawal if the balance is worth taking out.
+  let feesWei = finishable.reduce((s, w) => s + (w.feeWei || 0n), 0n);
+  if (exitFeeUsd != null && withdrawable > exitFeeUsd * 1.1 && exitFeeWei != null) feesWei += exitFeeWei;
+  let l1Cell;
+  if (res.l1Wei == null) l1Cell = `<div><b>?</b><span>ETH on Ethereum (could not read)</span></div>`;
+  else {
+    const have = toUsd(ctx, res.l1Wei);
+    const label = feesWei === 0n ? "ETH on Ethereum, for prove + claim fees"
+      : res.l1Wei >= feesWei ? "ETH on Ethereum, enough for these fees"
+      : `ETH on Ethereum, about ${fmtUsd(toUsd(ctx, feesWei - res.l1Wei))} short for these fees`;
+    l1Cell = `<div class="${feesWei > 0n && res.l1Wei < feesWei ? "short" : ""}"><b>${have != null ? fmtUsd(have) : fmtAmt(eth(res.l1Wei)) + " ETH"}</b><span>${label}</span></div>`;
+  }
+
+  const depositNote = { lending: "Withdraw it in the lending app, then bridge", vault: "Withdraw from the vault in its app, then bridge",
+    lp: "Remove the liquidity in the exchange app, then bridge", position: "Close the position in the exchange app, then bridge",
+    debt: "Money owed. Repay it before you can withdraw collateral" };
+  const deposits = res.deposits.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((d) => `
+    <tr><td>${esc(d.symbol)}${d.name ? ` <span class="note">${esc(d.name)}</span>` : ""}</td><td class="mono">${esc(d.holds)}</td>
+      <td class="num">${d.kind === "debt" ? `owed ${fmtUsd(d.usd)}` : fmtUsd(d.usd)}</td><td><span class="note">${esc(depositNote[d.kind])}</span></td></tr>`).join("");
+  const shownNfts = res.nfts.slice(0, 15);
+  const nfts = shownNfts.map((g) => `
+    <tr><td>${esc(g.name || short(g.contract))} <span class="note">${g.kind}</span></td><td class="num">${g.count}</td>
+      <td class="mono">${g.ids.map((id) => "#" + esc(id.length > 10 ? id.slice(0, 8) + "…" : id)).join(", ")}</td>
+      <td><a href="https://opensea.io/assets/blast/${esc(g.contract)}/${esc(g.ids[0])}" target="_blank" rel="noopener noreferrer">OpenSea</a></td></tr>`).join("");
+  const moreNfts = res.nfts.length - shownNfts.length;
+  const spamText = [res.spam ? `${res.spam} spam airdrop token${res.spam > 1 ? "s" : ""}` : "", res.nftSpam ? `${res.nftSpam} spam NFT${res.nftSpam > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
 
   const rows = res.tokens.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((t) => `
     <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd))}</span></td></tr>`).join("");
@@ -788,15 +992,29 @@ function walletCard(res, ctx) {
       <div><b>${fmtUsd(allValue)}</b><span>Still on Blast</span></div>
       <div><b>${exitFeeUsd != null ? fmtUsd(exitFeeUsd) : "?"}</b><span>Fees to withdraw it now</span></div>
       <div><b>${keep != null ? fmtUsd(keep) : "?"}</b><span>You would keep</span></div>
+      ${l1Cell}
     </div>`}
     ${res.tokens.length || res.unpriced.length ? `
     <h3>On Blast now</h3>
     <div class="table-wrap"><table>
       <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th></tr></thead>
       <tbody>${rows}${unpriced}</tbody>
-    </table></div>
-    ${ethLow ? `<p class="small muted">This wallet has no ETH on Blast. It needs a little ETH there to pay gas for any withdrawal or swap.</p>` : ""}` : ""}
-    ${res.spam ? `<details class="spam"><summary>${res.spam} spam airdrop token${res.spam > 1 ? "s" : ""} hidden</summary><p>Scammers send worthless tokens whose names point to fake "claim" sites. They are not shown here on purpose. Do not trade, approve or visit anything named in them.</p></details>` : ""}
+    </table></div>` : ""}
+    ${res.deposits.length ? `
+    <h3>Deposits in apps</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Receipt</th><th>What it holds</th><th class="num">Value</th><th>What to do</th></tr></thead>
+      <tbody>${deposits}</tbody>
+    </table></div>` : ""}
+    ${ethLow ? `<p class="small muted">This wallet has no ETH on Blast. It needs a little ETH there to pay gas for any withdrawal, swap or app withdrawal.</p>` : ""}
+    ${nftCount ? `
+    <h3>NFTs on Blast</h3>
+    <p class="small muted">The official bridge does not move NFTs. If one matters to you, sell or move it before the chain stops. A floor price is only the cheapest listing, so look for real offers.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Collection</th><th class="num">Count</th><th>Token IDs</th><th>Market</th></tr></thead>
+      <tbody>${nfts}${moreNfts > 0 ? `<tr><td colspan="4" class="note">and ${moreNfts} more collection${moreNfts > 1 ? "s" : ""}</td></tr>` : ""}</tbody>
+    </table></div>` : ""}
+    ${spamText ? `<details class="spam"><summary>${spamText} hidden</summary><p>Scammers send worthless tokens and NFTs whose names point to fake "claim" sites. They are not shown here on purpose. Do not trade, approve or visit anything named in them.</p></details>` : ""}
     ${res.withdrawals.length ? `
     <h3>Withdrawals already started</h3>
     <div class="table-wrap board"><table>
@@ -835,7 +1053,8 @@ $("check-form").addEventListener("submit", async (e) => {
       let html;
       try {
         const res = await checkWallet(a);
-        if (res.tokens.some((t) => (t.usd || 0) >= 1) || res.withdrawals.some((w) => w.worth === true)) helped = true;
+        if (res.tokens.some((t) => (t.usd || 0) >= 1) || res.deposits.some((d) => d.kind !== "debt" && (d.usd || 0) >= 1)
+          || res.withdrawals.some((w) => w.worth === true)) helped = true;
         html = walletCard(res, await context());
       }
       catch (err) { html = `<article class="wallet"><p class="err-box">${esc(short(a))}: could not check (${esc(err.message)}). Try again in a minute.</p></article>`; }

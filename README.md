@@ -3,6 +3,9 @@
 A read-only page for the Blast L2 shutdown. Paste a wallet address and it shows:
 
 - what the address still holds on Blast (ETH, USDB, WETH, BLAST, other tokens), with USD value
+- money parked in apps: lending receipts, vault shares and liquidity tokens, valued by what they hold
+- NFTs on Blast, which the official bridge cannot move
+- how much ETH the address has on Ethereum to pay for prove and claim
 - withdrawals the address already started, and where each one stands: waiting, ready to prove, proven (claim opens at …), ready to claim, claimed
 - whether each withdrawal, or the remaining balance, is worth more than the Ethereum fees needed to get it out
 - a countdown to 26 October 2026, the date Blast gave for its normal bridge interface
