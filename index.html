@@ -178,7 +178,14 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
 .tip-addr code { font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; user-select: all; overflow-wrap: anywhere; min-width: 0; }
 .soon { align-content: start; }
 .soon .pill { width: fit-content; }
-.helped { font-size: 0.92rem; color: var(--muted); }
+.helped {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--ok-bg); color: var(--ink); border-left: 4px solid var(--sign); border-radius: 8px;
+  padding: 12px 16px; font-size: 1rem;
+}
+.helped-emoji { font-size: 1.5rem; line-height: 1.1; flex: none; }
+.helped b { color: var(--ok); }
+.helped a { font-weight: 700; color: var(--ok); }
 
 @media (max-width: 520px) {
   .cd-cell { min-width: 64px; padding: 6px 9px 4px; }
@@ -836,7 +843,7 @@ $("check-form").addEventListener("submit", async (e) => {
       done++;
       msg.textContent = done < list.length ? `Checked ${done} of ${list.length}…` : `Checked ${list.length} address${list.length > 1 ? "es" : ""} at ${new Date().toLocaleTimeString()}.`;
     });
-    if (helped) box.insertAdjacentHTML("beforeend", `<p class="helped">Found something worth getting out? If this saved you time or money, the <a href="#tip">tip jar</a> is below. Entirely optional.</p>`);
+    if (helped) box.insertAdjacentHTML("beforeend", `<p class="helped"><span class="helped-emoji" aria-hidden="true">🎉</span><span><b>Found something worth getting out?</b> If this saved you time or money, the <a href="#tip">tip jar ↓</a> is below. Entirely optional.</span></p>`);
   } finally { btn.disabled = false; }
 });
 </script>
