@@ -176,6 +176,24 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 code { font-family: var(--font-mono); font-size: 0.86em; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
 footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
 .tip { border-top: 4px solid var(--sign); }
+/* Secondary sections fold into one accordion; a click on a title opens it. */
+.folds { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.fold + .fold { border-top: 1px solid var(--line); }
+.fold summary {
+  list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  padding: 14px clamp(16px, 3vw, 24px); font-family: var(--font-sign); font-weight: 800; font-size: 1.08rem;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary::after {
+  content: ""; margin-left: auto; width: 9px; height: 9px; flex: none;
+  border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(45deg);
+}
+.fold[open] summary::after { transform: rotate(-135deg); }
+.fold summary:hover { color: var(--sign); }
+.fold summary small { font-family: var(--font-body); font-weight: 400; font-size: 0.82rem; color: var(--muted); }
+.fold-body { padding: 0 clamp(16px, 3vw, 24px) 18px; display: grid; gap: 12px; }
+.example-fold > summary { cursor: pointer; color: var(--muted); font-size: 0.92rem; width: fit-content; }
+.example-fold[open] > summary { margin-bottom: 10px; }
 .tip-addr { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .tip-addr code { font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; user-select: all; overflow-wrap: anywhere; min-width: 0; }
 .soon { align-content: start; }
@@ -248,6 +266,8 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
   <section aria-labelledby="results-h" style="display:grid;gap:14px">
     <h2 id="results-h">Results</h2>
     <div id="results">
+      <details class="example-fold">
+      <summary>See an example result</summary>
       <article class="wallet example" aria-label="Example result">
         <span class="example-tag">Example output, not a real wallet</span>
         <header class="wallet-head">
@@ -292,11 +312,25 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
           </tbody>
         </table></div>
       </article>
+      </details>
     </div>
   </section>
 
-  <section class="panel" aria-labelledby="how-h">
-    <h2 id="how-h">How to get funds off Blast</h2>
+  <section class="panel tip" id="tip" aria-labelledby="tip-h">
+    <h2 id="tip-h">Tip jar</h2>
+    <p>If this page helped, or you found funds on Blast you had forgotten about, you can send a small thank-you. It is completely optional.</p>
+    <div class="tip-addr">
+      <code id="tip-address">0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2</code>
+      <button class="primary" type="button" data-copy="0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2">Copy address</button>
+    </div>
+    <p class="small muted">Any token or NFT on any EVM chain works: Ethereum, Base, Arbitrum, Abstract, Blast and others. Do not send from Solana, Bitcoin or Tron.</p>
+    <p class="small muted">The checker is free and works the same with or without a tip. Nothing is unlocked by sending anything. No real tool will ever ask you to pay to release your Blast funds.</p>
+  </section>
+
+  <section class="folds" aria-label="More about this page">
+  <details class="fold">
+    <summary><span>How to get funds off Blast</span><small>5 steps</small></summary>
+    <div class="fold-body">
     <ol class="steps">
       <li><p><b>Gather small balances first.</b> Every withdrawal costs the same on Ethereum, whatever the amount. If you have several wallets with a little ETH each, send it to one wallet on Blast first; a transfer on Blast costs a tiny fraction of a cent.</p></li>
       <li><p><b>Turn tokens into ETH if you want ETH.</b> WETH must be unwrapped to ETH before it can be withdrawn. USDB withdrawn through the bridge arrives on Ethereum as DAI and needs one more claim transaction, so swapping it to ETH on a Blast exchange first is often simpler.</p></li>
@@ -305,29 +339,17 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
       <li><p><b>Claim it 24 hours after proving.</b> This second Ethereum transaction releases the funds to the same address on Ethereum.</p></li>
     </ol>
     <p class="small muted">After 26 October the same steps still work, but by calling the bridge contracts on Ethereum directly. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
-  </section>
-
-  <section class="cols" aria-label="Tip jar and what is next">
-    <div class="panel tip" id="tip">
-      <h2>Tip jar</h2>
-      <p>If this page helped, or you found funds on Blast you had forgotten about, you can send a small thank-you. It is completely optional.</p>
-      <div class="tip-addr">
-        <code id="tip-address">0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2</code>
-        <button class="primary" type="button" data-copy="0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2">Copy address</button>
-      </div>
-      <p class="small muted">Any token or NFT on any EVM chain works: Ethereum, Base, Arbitrum, Abstract, Blast and others. Do not send from Solana, Bitcoin or Tron.</p>
-      <p class="small muted">The checker is free and works the same with or without a tip. Nothing is unlocked by sending anything. No real tool will ever ask you to pay to release your Blast funds.</p>
     </div>
-    <div class="panel soon">
-      <span class="pill info">Coming soon</span>
-      <h2>Abstract chain checker</h2>
+  </details>
+  <details class="fold">
+    <summary><span>Abstract chain checker</span><span class="pill info">Coming soon</span></summary>
+    <div class="fold-body">
       <p>A read-only checker like this one is being built for Abstract: paste an address, see what it holds and what needs attention. No wallet connection there either.</p>
     </div>
-  </section>
-
-  <section class="cols" aria-label="About this page">
-    <div class="panel">
-      <h2>How the numbers work</h2>
+  </details>
+  <details class="fold">
+    <summary><span>How the numbers work</span><small>fees, prices, deposits, NFTs</small></summary>
+    <div class="fold-body">
       <ul class="plain small">
         <li><b>Fees:</b> one withdrawal needs two Ethereum transactions. Proving takes about 430,000 gas and claiming about 240,000 gas, the medians of recent transactions on the Blast portal contract. The page multiplies these by the current Ethereum gas price.</li>
         <li><b>Worth it?</b> "Yes" means the value is higher than the Ethereum fees still to pay. Ethereum gas changes by the minute, so a "No" can turn into a "Yes" when gas is cheaper.</li>
@@ -339,8 +361,10 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
         <li>Withdrawal history covers the address's latest 100 transactions on Blast.</li>
       </ul>
     </div>
-    <div class="panel">
-      <h2>What this page reads</h2>
+  </details>
+  <details class="fold">
+    <summary><span>What this page reads</span><small>no server, no tracking</small></summary>
+    <div class="fold-body">
       <p class="small">Everything runs in your browser. There is no server and no tracking. Your address goes only to these public services:</p>
       <ul class="plain small">
         <li><code>rpc.blast.io</code>, <code>blast-rpc.publicnode.com</code>: Blast balances and transactions</li>
@@ -350,6 +374,7 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
       </ul>
       <p class="small muted">Only read requests are made (balances, contract reads, receipts). Open your browser's developer tools, Network tab, to watch every request, or view the page source; it is one file.</p>
     </div>
+  </details>
   </section>
 
   <footer>
