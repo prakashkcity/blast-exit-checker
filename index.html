@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Blast Exit Checker</title>
-<meta name="description" content="Paste a wallet address and see what it still holds on Blast L2, which withdrawals are waiting to be proven or claimed, and whether the Ethereum fees are worth it. Checking needs no wallet; optional Prove and Claim buttons send one transaction from your own wallet to Blast's official portal.">
+<meta name="description" content="Paste a wallet address and see what it still holds on Blast L2, which withdrawals are waiting to be proven or claimed, and whether the Ethereum fees are worth it. Checking needs no wallet; optional Withdraw, Prove and Claim buttons send one transaction from your own wallet to Blast's official contracts.">
 <meta property="og:title" content="Blast Exit Checker">
-<meta property="og:description" content="Blast L2 shutdown checker: balances, withdrawal status, fees vs value, and Prove / Claim buttons that work after the official bridge page closes. No approvals, no message signatures.">
+<meta property="og:description" content="Blast L2 shutdown checker: balances, withdrawal status, fees vs value, and Withdraw / Prove / Claim buttons that work after the official bridge page closes. No approvals, no message signatures.">
 <meta property="og:type" content="website">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='10' width='60' height='44' rx='8' fill='%230f6b4a'/%3E%3Crect x='6' y='14' width='52' height='36' rx='5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M20 40 L40 24 M30 24 H40 V34' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -249,6 +249,10 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
 .wallet-pick button { display: inline-flex; gap: 6px; align-items: center; }
 .wallet-pick img { width: 18px; height: 18px; }
 .act-safety { font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.act-amount {
+  width: 11em; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: var(--font-mono); font-size: 0.9rem;
+}
 
 @media (max-width: 520px) {
   .cd-cell { min-width: 64px; padding: 6px 9px 4px; }
@@ -301,9 +305,9 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="safe" aria-label="Safety">
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Checking needs no wallet</span>
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>No approvals, no message signatures</span>
-      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Prove / Claim go only to Blast's official contracts</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Withdraw / Prove / Claim go only to Blast's official contracts</span>
     </div>
-    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. Its optional Prove and Claim buttons ask your wallet to send one transaction to Blast's portal <code>0x0Ec6…Db6Cb</code> on Ethereum (for USDB's last step, Blast's DAI queue <code>0xa230…8438</code>); check that address in your wallet before confirming. Anything that asks you to approve tokens, sign a message, or send ETH to "unlock" a claim is a scam.</p>
+    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. Its optional buttons ask your wallet to send one transaction: Withdraw goes to Blast's bridge <code>0x4300…0005</code> on Blast (Unwrap to WETH <code>0x4300…0004</code>), Prove and Claim go to Blast's portal <code>0x0Ec6…Db6Cb</code> on Ethereum (for USDB's last step, Blast's DAI queue <code>0xa230…8438</code>); check that address in your wallet before confirming. Anything that asks you to approve tokens, sign a message, or send ETH to "unlock" a claim is a scam.</p>
   </section>
 
   <section aria-labelledby="results-h" style="display:grid;gap:14px">
@@ -376,11 +380,11 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <ol class="steps">
       <li><p><b>Gather small balances first.</b> Every withdrawal costs the same on Ethereum, whatever the amount. If you have several wallets with a little ETH each, send it to one wallet on Blast first; a transfer on Blast costs a tiny fraction of a cent.</p></li>
       <li><p><b>Turn tokens into ETH if you want ETH.</b> WETH must be unwrapped to ETH before it can be withdrawn. USDB withdrawn through the bridge arrives on Ethereum as DAI and needs one more claim transaction, so swapping it to ETH on a Blast exchange first is often simpler.</p></li>
-      <li><p><b>Start the withdrawal on <a href="https://blast.io/en/bridge" target="_blank" rel="noopener noreferrer">blast.io/en/bridge</a></b>, the official bridge, until 26 October. This needs a little ETH on Blast for gas.</p></li>
+      <li><p><b>Start the withdrawal on Blast.</b> Check your address above and press <b>Withdraw</b> on ETH or USDB (or use <a href="https://blast.io/en/bridge" target="_blank" rel="noopener noreferrer">blast.io/en/bridge</a> while it is open). This needs a little ETH on Blast for gas; "Max" keeps it aside for you.</p></li>
       <li><p><b>Prove it on Ethereum about an hour later.</b> This is the first Ethereum transaction and needs ETH on Ethereum for gas. Check your address above and press <b>Prove</b> on the withdrawal.</p></li>
       <li><p><b>Claim it 24 hours after proving.</b> Press <b>Claim</b>. This second Ethereum transaction releases the funds to the same address on Ethereum. USDB arrives as DAI after one more claim, which only the receiving wallet can send.</p></li>
     </ol>
-    <p class="small muted">The Prove and Claim buttons call Blast's contracts on Ethereum directly, so they keep working after the bridge page closes. Any wallet can pay for them: a friend can prove or claim your withdrawal, and the funds still go only to the address that withdrew. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
+    <p class="small muted">The Withdraw, Prove and Claim buttons call Blast's contracts directly, so they keep working after the bridge page closes. Withdraw must come from the wallet that holds the funds. Prove and Claim can be paid by any wallet: a friend can prove or claim your withdrawal, and the funds still go only to the address that withdrew. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
     </div>
   </details>
   <details class="fold">
@@ -415,13 +419,13 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
         <li><code>api.coingecko.com</code>, <code>api.dexscreener.com</code>: prices (no address sent)</li>
       </ul>
       <p class="small muted">Checking makes only read requests (balances, contract reads, receipts). Open your browser's developer tools, Network tab, to watch every request, or view the page source.</p>
-      <p class="small"><b>Prove / Claim buttons (optional).</b> Only when you press one, the page loads <code>vendor/ethers-6.13.4.umd.min.js</code> from this same site (an unmodified copy of ethers.js, MIT licence, checked by its hash), builds the transaction from Blast and Ethereum data, simulates it, and asks your wallet to send it. You confirm it in your wallet. The page never asks for approvals, message signatures, a seed phrase or a key, and never receives your funds: where the money goes is fixed inside the withdrawal.</p>
+      <p class="small"><b>Withdraw / Unwrap / Prove / Claim buttons (optional).</b> Only when you press one, the page loads <code>vendor/ethers-6.13.4.umd.min.js</code> from this same site (an unmodified copy of ethers.js, MIT licence, checked by its hash), builds the transaction from Blast and Ethereum data, simulates it, and asks your wallet to send it. You confirm it in your wallet. The page never asks for approvals, message signatures, a seed phrase or a key, and never receives your funds: where the money goes is fixed inside the withdrawal.</p>
     </div>
   </details>
   </section>
 
   <footer>
-    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It cannot move funds by itself: Prove and Claim only ask your own wallet to send a transaction to Blast's contracts, and you confirm it there. Check results on <a href="https://blastscan.io" target="_blank" rel="noopener noreferrer">blastscan.io</a> before acting, and withdraw only through the official bridge or Blast's documented contracts.</p>
+    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It cannot move funds by itself: its buttons only ask your own wallet to send a transaction to Blast's contracts, and you confirm it there. Check results on <a href="https://blastscan.io" target="_blank" rel="noopener noreferrer">blastscan.io</a> before acting, and withdraw only through the official bridge or Blast's documented contracts.</p>
     <p>Contract addresses used: Blast portal on Ethereum <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>, ETH withdrawal queue <code>0x98078db053902644191f93988341E31289E1C8FE</code>, USDB→DAI withdrawal queue <code>0xa230285d5683C74935aD14c446e137c8c8828438</code>.</p>
   </footer>
 </div>
@@ -434,12 +438,19 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   <div class="act-body">
     <p class="act-what" id="act-what"></p>
     <ol class="act-steps">
-      <li id="st-check"><b>Build and simulate the transaction</b><span class="msg"></span></li>
+      <li id="st-check"><b>Build and simulate the transaction</b><span class="msg"></span>
+        <div class="row" id="act-amount-row" hidden>
+          <label class="small" for="act-amount">Amount</label>
+          <input id="act-amount" class="act-amount" inputmode="decimal" autocomplete="off" spellcheck="false">
+          <span class="small" id="act-unit"></span>
+          <button class="ghost" type="button" id="act-max">Max</button>
+        </div>
+      </li>
       <li id="st-wallet"><b>Wallet that pays the gas</b><span class="msg"></span><div class="wallet-pick" id="act-wallets"></div></li>
       <li id="st-send"><b>Confirm in your wallet</b><span class="msg"></span><div class="row"><button class="primary" type="button" id="act-send" disabled>Send from wallet</button></div></li>
       <li id="st-done"><b>On Ethereum</b><span class="msg"></span></li>
     </ol>
-    <p class="act-safety">Your wallet should show one transaction on <b>Ethereum</b> to <code id="act-to"></code>, sending 0 ETH. No token approval, no message to sign. Keep the gas limit the wallet shows; lowering it can make a claim fail. The page cannot change where the funds go.</p>
+    <p class="act-safety" id="act-safety"></p>
   </div>
 </dialog>
 
@@ -466,6 +477,15 @@ const CFG = {
   // Constants.ESTIMATION_ADDRESS: estimating finalize from here makes the portal revert when the
   // inner call would fail, so the gas limit it gives cannot leave a withdrawal finalized but unpaid.
   estimation: "0x0000000000000000000000000000000000000001",
+  // Starting a withdrawal on Blast, per docs.blast.io "Withdrawing from Smart Contracts" (read
+  // 2026-10-26): ETH → L2BlastBridge.bridgeETHTo(to, 200000, 0x) with the ETH as value; USDB →
+  // L2BlastBridge.bridgeERC20To(USDB, DAI, to, amount, 800000, 0x), no approval; WETH must be
+  // unwrapped first with WETH.withdraw(wad). Simulated on Blast 2026-10-26: 120,162 / 171,236 / 46,400 gas.
+  blastChainId: 81457,
+  l2Bridge: "0x4300000000000000000000000000000000000005",
+  daiL1: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  gasOracle: "0x420000000000000000000000000000000000000F", // OP-Stack GasPriceOracle: the L1 data fee
+  blastTipWei: 1000000n,      // 0.001 gwei, Blast's eth_maxPriorityFeePerGas on 2026-10-26 (base fee ~0.00000025 gwei)
   topicMessagePassed: "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054",
   deadlineMs: Date.UTC(2026, 9, 26, 0, 0, 0),
   proveGas: 429493n,
@@ -1093,9 +1113,9 @@ function walletCard(res, ctx) {
   const spamText = [res.spam ? `${res.spam} spam airdrop token${res.spam > 1 ? "s" : ""}` : "", res.nftSpam ? `${res.nftSpam} spam NFT${res.nftSpam > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
 
   const rows = res.tokens.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((t) => `
-    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd))}</span></td></tr>`).join("");
+    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd))}</span></td><td>${startButton(t, res.address, exitFeeUsd)}</td></tr>`).join("");
   const unpriced = res.unpriced.map((t) => `
-    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">?</td><td><span class="note">${esc(unpricedAdvice(t.symbol))}</span></td></tr>`).join("");
+    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">?</td><td><span class="note">${esc(unpricedAdvice(t.symbol))}</span></td><td></td></tr>`).join("");
   const board = res.withdrawals.map((w) => `
     <tr>
       <td class="when">${esc(fmtWhen(w.time))}</td>
@@ -1128,9 +1148,10 @@ function walletCard(res, ctx) {
     ${res.tokens.length || res.unpriced.length ? `
     <h3>On Blast now</h3>
     <div class="table-wrap"><table>
-      <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th></tr></thead>
+      <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th><th></th></tr></thead>
       <tbody>${rows}${unpriced}</tbody>
-    </table></div>` : ""}
+    </table></div>
+    ${res.tokens.some((t) => /^(eth|usdb|weth)$/.test(t.kind)) ? `<p class="small muted">Withdraw starts the withdrawal on Blast from this address itself (one transaction on Blast, a fraction of a cent). It arrives at the same address on Ethereum after Prove and Claim.</p>` : ""}` : ""}
     ${res.deposits.length ? `
     <h3>Deposits in apps</h3>
     <div class="table-wrap"><table>
@@ -1188,6 +1209,12 @@ const ABI = {
     "function claimWithdrawal(uint256 requestId, uint256 hintId) returns (bool)",
   ],
   passer: ["event MessagePassed(uint256 indexed nonce, address indexed sender, address indexed target, uint256 value, uint256 gasLimit, bytes data, bytes32 withdrawalHash)"],
+  l2bridge: [
+    "function bridgeETHTo(address _to, uint32 _minGasLimit, bytes _extraData) payable",
+    "function bridgeERC20To(address _localToken, address _remoteToken, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)",
+  ],
+  weth: ["function withdraw(uint256 wad)", "function balanceOf(address) view returns (uint256)"],
+  gasOracle: ["function getL1Fee(bytes) view returns (uint256)"],
   bridge: [
     "function relayMessage(uint256 _nonce, address _sender, address _target, uint256 _value, uint256 _minGasLimit, bytes _message)",
     "function finalizeBridgeETH(address _from, address _to, uint256 _amount, bytes _extraData)",
@@ -1201,6 +1228,17 @@ function actButton(w, owner) {
   ACTS.set(id, { kind: w.act, owner: owner.toLowerCase(), w });
   const label = w.act === "prove" ? "Prove" : w.act === "dai" ? "Claim DAI" : "Claim";
   return `<button class="act${w.worth === false ? " soft" : ""}" type="button" data-act="${id}" title="${w.worth === false ? "The Ethereum fee is higher than the value right now" : "Send this step from a wallet"}">${label}</button>`;
+}
+
+// "On Blast now" rows: start a withdrawal (ETH, USDB) or unwrap WETH, sent by the holder itself.
+function startButton(t, owner, exitFeeUsd) {
+  const kind = t.kind === "eth" ? "start-eth" : t.kind === "usdb" ? "start-usdb" : t.kind === "weth" ? "unwrap" : null;
+  // Below these, the balance is dust: one Blast transaction costs ~1.5e-7 ETH (measured 2026-10-26).
+  if (!kind || !(t.amount >= (kind === "start-usdb" ? 0.01 : 0.000001))) return "";
+  const id = "a" + ++actSeq;
+  ACTS.set(id, { kind, owner: owner.toLowerCase(), w: { asset: t.symbol, amount: t.amount, usd: t.usd } });
+  const cheap = t.usd != null && exitFeeUsd != null && t.usd < exitFeeUsd;
+  return `<button class="act${cheap ? " soft" : ""}" type="button" data-act="${id}" title="${cheap ? "Worth less than the Ethereum fees to finish it right now" : "Start this from the wallet that holds it"}">${kind === "unwrap" ? "Unwrap" : "Withdraw"}</button>`;
 }
 
 let ethersP = null;
@@ -1229,9 +1267,9 @@ let conn = null; // { provider, name, account }
 const listening = new WeakSet();
 
 // eth_estimateGas with the revert reason kept (rpc() turns reverts into null).
-async function simulate(tx) {
+async function simulate(tx, urls = CFG.l1Rpcs) {
   let last;
-  for (const url of CFG.l1Rpcs) {
+  for (const url of urls) {
     let j;
     try { j = await postJson(url, { jsonrpc: "2.0", id: 1, method: "eth_estimateGas", params: [tx] }); }
     catch (e) { last = e; continue; }
@@ -1250,9 +1288,55 @@ function receiverOf(E, wtx) {
   return null;
 }
 
+// Starting on Blast (or unwrapping WETH): only the holder can send it, so it is simulated from the
+// holder's address. Blast charges an L1 data fee on top of gas and checks the balance for it at
+// submission (op-geth txpool), so "withdraw all" keeps gasLimit × maxFee + 2 × getL1Fee aside —
+// the mint bot's sweep-all on Blast never landed until it did the same (fixed 2026-10-24).
+async function buildStart(E, a, amountRaw) {
+  const owner = a.owner;
+  const BR = new E.Interface(ABI.l2bridge), W = new E.Interface(ABI.weth), G = new E.Interface(ABI.gasOracle);
+  const [ethHex, blk, tokHex] = await rpc(CFG.blastRpcs, [
+    { method: "eth_getBalance", params: [owner, "latest"] },
+    { method: "eth_getBlockByNumber", params: ["latest", false] },
+    a.kind === "start-eth" ? { method: "eth_chainId", params: [] } : call(a.kind === "start-usdb" ? USDB : WETH, SEL.balanceOf + arg(owner)),
+  ]);
+  const ethBal = big(ethHex), tokBal = a.kind === "start-eth" ? 0n : big(tokHex);
+  const tip = CFG.blastTipWei, maxFee = big(blk.baseFeePerGas) * 2n + tip;
+  const make = (amt) => a.kind === "start-eth" ? { to: CFG.l2Bridge, data: BR.encodeFunctionData("bridgeETHTo", [owner, 200000, "0x"]), value: amt }
+    : a.kind === "start-usdb" ? { to: CFG.l2Bridge, data: BR.encodeFunctionData("bridgeERC20To", [USDB, CFG.daiL1, owner, amt, 800000, "0x"]), value: 0n }
+    : { to: WETH, data: W.encodeFunctionData("withdraw", [amt]), value: 0n };
+  const hex = (v) => "0x" + v.toString(16);
+  // Gas does not depend on the ETH amount, so the first simulation sends 1 wei.
+  const probe = make(a.kind === "start-eth" ? 1n : tokBal > 0n ? tokBal : 1n);
+  if (a.kind !== "start-eth" && tokBal === 0n) throw new Error(`This address holds no ${a.w.asset} on Blast any more.`);
+  const gas = await simulate({ from: owner, to: probe.to, data: probe.data, value: hex(probe.value) }, CFG.blastRpcs);
+  const gasLimit = (gas * 12n) / 10n;
+  const unsigned = E.Transaction.from({ type: 2, chainId: CFG.blastChainId, to: probe.to, value: (1n << 96n) - 1n, data: probe.data,
+    nonce: 2 ** 32 - 1, gasLimit, maxFeePerGas: maxFee, maxPriorityFeePerGas: tip }).unsignedSerialized;
+  const [l1Hex] = await rpc(CFG.blastRpcs, [call(CFG.gasOracle, G.encodeFunctionData("getL1Fee", [unsigned]))]);
+  const reserve = gasLimit * maxFee + big(l1Hex) * 2n;
+  const maxAmount = a.kind === "start-eth" ? (ethBal > reserve ? ethBal - reserve : 0n) : tokBal;
+  if (a.kind === "start-eth" && maxAmount === 0n) throw new Error(`This address holds ${fmtAmt(eth(ethBal))} ETH on Blast, not enough for the ${fmtAmt(eth(reserve))} ETH this transaction costs there.`);
+  if (a.kind !== "start-eth" && ethBal < reserve) throw new Error(`This address needs about ${fmtAmt(eth(reserve))} ETH on Blast to pay for the transaction there, and holds ${fmtAmt(eth(ethBal))} ETH.`);
+  const amount = amountRaw ?? maxAmount;
+  if (amount <= 0n || amount > maxAmount) throw new Error(`Enter an amount above 0 and at most ${fmtAmt(units(maxAmount, 18))} ${a.kind === "unwrap" ? "WETH" : a.w.asset}.`);
+  const tx = make(amount);
+  if (amountRaw != null) await simulate({ from: owner, to: tx.to, data: tx.data, value: hex(tx.value) }, CFG.blastRpcs);
+  const ctx = await context();
+  const finishWei = costWei(ctx, a.kind === "start-usdb" ? CFG.proveGas + 318000n + CFG.usdbClaimGas : CFG.proveGas + CFG.finalizeGas);
+  const what = `${fmtAmt(units(amount, 18))} ${a.kind === "unwrap" ? "WETH" : a.w.asset}`;
+  const summary = a.kind === "unwrap"
+    ? `Checked: unwraps ${what} into ETH on Blast. Simulated without errors.`
+    : `Checked: starts a withdrawal of ${what} to ${short(owner)} on Ethereum${a.kind === "start-usdb" ? " (paid out as DAI)" : ""}. Simulated without errors. ` +
+      `Finishing it on Ethereum later (prove + claim${a.kind === "start-usdb" ? " + DAI claim" : ""}) costs about ${fmtUsd(toUsd(ctx, finishWei))} at today's gas.`;
+  return { chainId: CFG.blastChainId, to: tx.to, data: tx.data, value: tx.value, gasLimit, maxFeePerGas: maxFee, maxPriorityFeePerGas: tip,
+    expectedWei: gas * maxFee + big(l1Hex), needWei: tx.value + reserve, onlyFrom: owner, maxAmount, amount, receiver: owner, receive: what, summary };
+}
+
 // Everything the wallet will be asked to send, built and simulated. Throws a plain-language reason otherwise.
-async function buildAct(a) {
+async function buildAct(a, amountRaw) {
   const E = await loadEthers();
+  if (a.kind === "start-eth" || a.kind === "start-usdb" || a.kind === "unwrap") return buildStart(E, a, amountRaw);
   const ac = E.AbiCoder.defaultAbiCoder();
   const P = new E.Interface(ABI.portal), O = new E.Interface(ABI.oracle), Q = new E.Interface(ABI.queue);
   const read = async (to, iface, fn, args = []) => {
@@ -1341,6 +1425,10 @@ async function buildAct(a) {
 
 const dlg = $("act-dlg");
 let cur = null; // the open action: { a, built, token }
+const START = new Set(["start-eth", "start-usdb", "unwrap"]); // sent on Blast by the holder
+const BLAST_NET = { chainId: "0x13e31", chainName: "Blast", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.blast.io"], blockExplorerUrls: ["https://blastscan.io"] };
+const TITLES = { prove: "Prove this withdrawal", claim: "Claim this withdrawal", dai: "Claim the DAI",
+  "start-eth": "Withdraw ETH from Blast", "start-usdb": "Withdraw USDB from Blast (arrives as DAI)", unwrap: "Unwrap WETH on Blast" };
 function step(id, state, html) { const li = $(id); li.className = state || ""; if (html != null) li.querySelector(".msg").innerHTML = html; }
 function walletErr(e) {
   if (e?.code === 4001) return "You cancelled in the wallet. Nothing was sent.";
@@ -1353,10 +1441,20 @@ async function openAct(id) {
   if (!a) return;
   const token = {};
   cur = { a, built: null, token };
-  $("act-title").textContent = a.kind === "prove" ? "Prove this withdrawal" : a.kind === "dai" ? "Claim the DAI" : "Claim this withdrawal";
-  $("act-what").innerHTML = `${esc(fmtAmt(a.w.amount ?? 0))} ${esc(a.w.asset)} · withdrawn by <span class="mono">${esc(short(a.owner))}</span> · started ${esc(fmtWhen(a.w.time))}`;
-  // Checksummed, as wallets show them.
-  $("act-to").textContent = a.kind === "dai" ? "0xa230285d5683C74935aD14c446e137c8c8828438" : "0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb";
+  const start = START.has(a.kind);
+  $("act-title").textContent = TITLES[a.kind];
+  $("act-what").innerHTML = start
+    ? `${esc(fmtAmt(a.w.amount ?? 0))} ${esc(a.w.asset)} on Blast · held by <span class="mono">${esc(short(a.owner))}</span>`
+    : `${esc(fmtAmt(a.w.amount ?? 0))} ${esc(a.w.asset)} · withdrawn by <span class="mono">${esc(short(a.owner))}</span> · started ${esc(fmtWhen(a.w.time))}`;
+  // The contract the wallet will show, checksummed as wallets show it.
+  const to = a.kind === "dai" ? "0xa230285d5683C74935aD14c446e137c8c8828438" : a.kind === "unwrap" ? WETH : start ? CFG.l2Bridge : "0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb";
+  $("act-safety").innerHTML = `Your wallet should show one transaction on <b>${start ? "Blast" : "Ethereum"}</b> to <code>${esc(to)}</code>, ${a.kind === "start-eth" ? "sending the amount above in ETH" : "sending 0 ETH"}. No token approval, no message to sign. `
+    + (start ? "Only the address that holds the funds can start this, and they arrive at the same address on Ethereum." : "Keep the gas limit the wallet shows; lowering it can make a claim fail. The page cannot change where the funds go.");
+  $("st-wallet").querySelector("b").textContent = start ? "Wallet that holds it" : "Wallet that pays the gas";
+  $("st-done").querySelector("b").textContent = start ? "On Blast" : "On Ethereum";
+  $("act-amount-row").hidden = !start;
+  $("act-amount").value = "";
+  $("act-unit").textContent = a.kind === "unwrap" ? "WETH" : a.w.asset;
   for (const s of ["st-check", "st-wallet", "st-send", "st-done"]) step(s, "", "");
   $("act-send").disabled = true;
   renderWallets();
@@ -1366,6 +1464,7 @@ async function openAct(id) {
     const built = await buildAct(a);
     if (cur?.token !== token) return;
     cur.built = built;
+    if (start) { $("act-amount").value = (await loadEthers()).formatUnits(built.maxAmount, 18); cur.isMax = true; }
     step("st-check", "done", esc(built.summary));
   } catch (e) {
     if (cur?.token !== token) return;
@@ -1380,6 +1479,7 @@ function renderWallets() {
   if (conn) {
     let note = "";
     if (a?.kind === "dai" && conn.account !== a.w.dai.recipient) note = `<br><b>Only ${esc(short(a.w.dai.recipient))} can claim this DAI.</b> Switch to that account in the wallet.`;
+    else if (a && START.has(a.kind) && conn.account !== a.owner) note = `<br><b>Only ${esc(short(a.owner))} can start this, since it holds the funds.</b> Switch to that account in the wallet.`;
     else if (a && conn.account !== a.owner) note = `<br>This wallet pays the gas for <span class="mono">${esc(short(a.owner))}</span>; the funds still go to <span class="mono">${esc(short(cur?.built?.receiver || a.owner))}</span>.`;
     step("st-wallet", "done", `${esc(conn.name)} · <span class="mono">${esc(short(conn.account))}</span>${note}`);
     box.innerHTML = `<button class="ghost" type="button" data-wallet-reset>Use another wallet</button>`;
@@ -1391,7 +1491,7 @@ function renderWallets() {
     box.innerHTML = "";
     return;
   }
-  step("st-wallet", "", "Pick the wallet that pays the Ethereum gas. Any wallet can pay; it does not have to be the one that withdrew.");
+  step("st-wallet", "", a && START.has(a.kind) ? "Pick the wallet that holds these funds on Blast." : "Pick the wallet that pays the Ethereum gas. Any wallet can pay; it does not have to be the one that withdrew.");
   box.innerHTML = list.map((w, i) => `<button class="ghost" type="button" data-wallet="${i}">${w.icon ? `<img alt="" src="${esc(w.icon)}">` : ""}${esc(w.name)}</button>`).join("");
 }
 
@@ -1424,12 +1524,33 @@ async function refreshSend() {
   if (!b) { step("st-send", "", ""); return; }
   if (!conn) { step("st-send", "", "Connect a wallet first."); return; }
   if (!allowed) { step("st-send", "fail", "This wallet cannot send this step."); return; }
-  step("st-send", "", `About ${esc(fmtAmt(eth(b.expectedWei)))} ETH (${esc(fmtUsd(toUsd(await context(), b.expectedWei)))}) in Ethereum gas at today's price; your wallet shows the exact fee and may show a higher maximum, unused gas is not charged.`);
+  const onBlast = b.chainId === CFG.blastChainId;
+  const usd = fmtUsd(toUsd(await context(), b.expectedWei));
+  step("st-send", "", onBlast
+    ? `Gas on Blast: about ${esc(fmtAmt(eth(b.expectedWei)))} ETH (${esc(usd)}). The wallet switches to Blast for this.`
+    : `About ${esc(fmtAmt(eth(b.expectedWei)))} ETH (${esc(usd)}) in Ethereum gas at today's price; your wallet shows the exact fee and may show a higher maximum, unused gas is not charged.`);
   try {
-    const [bal] = await rpc(CFG.l1Rpcs, [{ method: "eth_getBalance", params: [conn.account, "latest"] }]);
+    const need = onBlast ? b.needWei : b.expectedWei;
+    const [bal] = await rpc(onBlast ? CFG.blastRpcs : CFG.l1Rpcs, [{ method: "eth_getBalance", params: [conn.account, "latest"] }]);
     if (cur?.token !== token) return;
-    if (big(bal) < b.expectedWei) step("st-send", "fail", `This wallet holds ${esc(fmtAmt(eth(big(bal))))} ETH on Ethereum, less than the gas needed (about ${esc(fmtAmt(eth(b.expectedWei)))} ETH). Add ETH on Ethereum, or let another wallet pay.`);
+    if (big(bal) < need) step("st-send", "fail", onBlast
+      ? `This wallet holds ${esc(fmtAmt(eth(big(bal))))} ETH on Blast, less than this needs (about ${esc(fmtAmt(eth(need)))} ETH).`
+      : `This wallet holds ${esc(fmtAmt(eth(big(bal))))} ETH on Ethereum, less than the gas needed (about ${esc(fmtAmt(eth(need)))} ETH). Add ETH on Ethereum, or let another wallet pay.`);
   } catch { /* balance unknown: the wallet will say so */ }
+}
+
+// Put the wallet on the chain the transaction is for; Blast is added if the wallet does not know it.
+async function onChain(provider, chainId) {
+  const want = chainId === CFG.blastChainId ? BLAST_NET.chainId : "0x1", name = chainId === CFG.blastChainId ? "Blast" : "Ethereum mainnet";
+  if (String(await provider.request({ method: "eth_chainId" })).toLowerCase() === want) return;
+  try { await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: want }] }); }
+  catch (e) {
+    if (e?.code === 4902 && want === BLAST_NET.chainId) {
+      try { await provider.request({ method: "wallet_addEthereumChain", params: [BLAST_NET] }); }
+      catch (e2) { throw new Error(e2?.code === 4001 ? "Blast was not added to the wallet. Nothing was sent." : `Add the Blast network to the wallet, then press Send again.`); }
+    } else throw new Error(e?.code === 4001 ? "The wallet stayed on another network. Nothing was sent." : `Switch the wallet to ${name}, then press Send again.`);
+  }
+  if (String(await provider.request({ method: "eth_chainId" })).toLowerCase() !== want) throw new Error(`The wallet is not on ${name}. Switch it, then press Send again.`);
 }
 
 async function sendAct() {
@@ -1437,22 +1558,31 @@ async function sendAct() {
   if (!a || !cur.built || !conn) return;
   $("act-send").disabled = true;
   try {
-    step("st-send", "doing", "Checking the wallet is on Ethereum…");
-    if (String(await conn.provider.request({ method: "eth_chainId" })).toLowerCase() !== "0x1") {
-      try { await conn.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x1" }] }); }
-      catch (e) { throw new Error(e?.code === 4001 ? "The wallet stayed on another network. Nothing was sent." : "Switch the wallet to Ethereum mainnet, then press Send again."); }
-      if (String(await conn.provider.request({ method: "eth_chainId" })).toLowerCase() !== "0x1") throw new Error("The wallet is not on Ethereum mainnet. Switch it, then press Send again.");
+    const chainId = cur.built.chainId ?? 1;
+    step("st-send", "doing", `Checking the wallet is on ${chainId === CFG.blastChainId ? "Blast" : "Ethereum"}…`);
+    await onChain(conn.provider, chainId);
+    // "Max" is recomputed now: Blast's L1 data fee moves with every Ethereum block, so a max taken a
+    // minute ago can be a few wei too high (measured in the local test: the second build's max was lower).
+    let amountRaw;
+    if (START.has(a.kind) && !cur.isMax) {
+      try { amountRaw = (await loadEthers()).parseUnits($("act-amount").value.trim(), 18); }
+      catch { throw new Error("Enter the amount as a number, for example 0.01."); }
     }
     // Build and simulate again right before sending: a claim's gas limit must come from a fresh simulation.
     step("st-send", "doing", "Simulating once more…");
-    const b = await buildAct(a);
+    const b = await buildAct(a, amountRaw);
     if (cur?.token !== token) return;
     cur.built = b;
+    if (START.has(a.kind)) $("act-amount").value = (await loadEthers()).formatUnits(b.amount, 18);
     step("st-send", "doing", "Confirm the transaction in your wallet…");
-    const hash = await conn.provider.request({ method: "eth_sendTransaction",
-      params: [{ from: conn.account, to: b.to, data: b.data, value: "0x0", gas: "0x" + b.gasLimit.toString(16) }] });
+    const hex = (v) => "0x" + v.toString(16);
+    const params = { from: conn.account, to: b.to, data: b.data, value: hex(b.value ?? 0n), gas: hex(b.gasLimit) };
+    // On Blast the fees are set, because "withdraw all" reserved exactly gasLimit × maxFee (+ the L1 fee).
+    if (b.maxFeePerGas != null) Object.assign(params, { maxFeePerGas: hex(b.maxFeePerGas), maxPriorityFeePerGas: hex(b.maxPriorityFeePerGas) });
+    const hash = await conn.provider.request({ method: "eth_sendTransaction", params: [params] });
     if (cur?.token !== token) return;
-    step("st-send", "done", `Sent: <a class="mono" href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`);
+    const scan = chainId === CFG.blastChainId ? "https://blastscan.io/tx/" : "https://etherscan.io/tx/";
+    step("st-send", "done", `Sent: <a class="mono" href="${scan}${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`);
     await waitReceipt(hash, a, b, token);
   } catch (e) {
     if (cur?.token !== token) return;
@@ -1462,23 +1592,26 @@ async function sendAct() {
 }
 
 async function waitReceipt(hash, a, b, token) {
-  step("st-done", "doing", "Waiting for Ethereum to include it (usually within a minute)…");
+  const onBlast = (b.chainId ?? 1) === CFG.blastChainId, chain = onBlast ? "Blast" : "Ethereum";
+  step("st-done", "doing", `Waiting for ${chain} to include it (usually ${onBlast ? "a few seconds" : "within a minute"})…`);
   const t0 = Date.now();
   while (Date.now() - t0 < 15 * 60000) {
-    await sleep(4000);
+    await sleep(onBlast ? 2000 : 4000);
     if (cur?.token !== token) return;
     let rc = null;
-    try { [rc] = await rpc(CFG.l1Rpcs, [{ method: "eth_getTransactionReceipt", params: [hash] }]); } catch { continue; }
+    try { [rc] = await rpc(onBlast ? CFG.blastRpcs : CFG.l1Rpcs, [{ method: "eth_getTransactionReceipt", params: [hash] }]); } catch { continue; }
     if (!rc) continue;
-    if (big(rc.status) !== 1n) { step("st-done", "fail", `It failed on Ethereum (block ${big(rc.blockNumber)}). The withdrawal is unchanged; see the link above.`); return; }
-    const fee = big(rc.gasUsed) * big(rc.effectiveGasPrice || "0x0");
+    if (big(rc.status) !== 1n) { step("st-done", "fail", `It failed on ${chain} (block ${big(rc.blockNumber)}). Nothing moved; see the link above.`); return; }
+    // OP-Stack receipts carry the L1 data fee separately.
+    const fee = big(rc.gasUsed) * big(rc.effectiveGasPrice || "0x0") + big(rc.l1Fee || "0x0");
     const what = a.kind === "prove" ? "Proven. The claim opens in 24 hours: come back, check the address again and press Claim."
-      : a.kind === "dai" ? `Claimed: ${esc(b.receive)} sent to <span class="mono">${esc(short(b.receiver))}</span> on Ethereum.`
+      : a.kind === "unwrap" ? `Unwrapped: ${esc(b.receive)} is now ETH at this address on Blast. Check the address again, then press Withdraw on the ETH row.`
+      : START.has(a.kind) ? `Started: ${esc(b.receive)} is on its way to <span class="mono">${esc(short(b.receiver))}</span> on Ethereum. It can be proven in about an hour, once Blast posts its next checkpoint to Ethereum: check the address again then and press Prove.`
       : `Claimed: ${esc(b.receive)} sent to <span class="mono">${esc(short(b.receiver))}</span> on Ethereum.`;
     step("st-done", "done", `${what} Block ${big(rc.blockNumber)}, fee ${esc(fmtAmt(eth(fee)))} ETH. <button class="ghost" type="button" data-recheck>Check the address again</button>`);
     return;
   }
-  step("st-done", "", "Still not included after 15 minutes; gas may have been set low. Follow the Etherscan link above.");
+  step("st-done", "", `Still not included after 15 minutes; gas may have been set low. Follow the link above.`);
 }
 
 document.addEventListener("click", (e) => {
@@ -1490,6 +1623,8 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("button[data-recheck]")) { dlg.close(); $("check-form").requestSubmit(); }
 });
 $("act-send").addEventListener("click", sendAct);
+$("act-max").addEventListener("click", async () => { if (cur?.built?.maxAmount != null) { $("act-amount").value = (await loadEthers()).formatUnits(cur.built.maxAmount, 18); cur.isMax = true; } });
+$("act-amount").addEventListener("input", () => { if (cur) cur.isMax = false; });
 $("act-close").addEventListener("click", () => dlg.close());
 dlg.addEventListener("close", () => { cur = null; });
 
