@@ -10,6 +10,16 @@
 <meta property="og:type" content="website">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='10' width='60' height='44' rx='8' fill='%230f6b4a'/%3E%3Crect x='6' y='14' width='52' height='36' rx='5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M20 40 L40 24 M30 24 H40 V34' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- Clickjacking guard. GitHub Pages cannot send X-Frame-Options or a CSP frame-ancestors header (and
+     frame-ancestors is ignored in a <meta> CSP), so the page starts hidden and shows itself only when it
+     is the top window. Framed by another site it tries to take over the tab; where that is not allowed
+     (sandbox, or a browser that blocks it without a click) it stays blank, so no one can lay a fake page
+     over its buttons. -->
+<style id="frame-guard">html { display: none !important; }</style>
+<script>
+  if (window.self === window.top) document.getElementById("frame-guard").remove();
+  else { try { window.top.location = window.self.location.href; } catch (e) { /* not allowed: stay hidden */ } }
+</script>
 <style>
 /* Layout: a highway exit sign holds the countdown; under it one working column —
    live chain status, the address box, a results board per wallet, then how to get out. */
