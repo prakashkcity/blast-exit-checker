@@ -1,6 +1,6 @@
 # Blast Exit Checker
 
-A read-only page for the Blast L2 shutdown. Paste a wallet address and it shows:
+A page for the Blast L2 shutdown. Paste a wallet address and it shows:
 
 - what the address still holds on Blast (ETH, USDB, WETH, BLAST, other tokens), with USD value
 - money parked in apps: lending receipts, vault shares and liquidity tokens, valued by what they hold
@@ -10,13 +10,17 @@ A read-only page for the Blast L2 shutdown. Paste a wallet address and it shows:
 - whether each withdrawal, or the remaining balance, is worth more than the Ethereum fees needed to get it out
 - a countdown to 26 October 2026, the date Blast gave for its normal bridge interface
 
-**No wallet connection, no signatures, no approvals, no transactions.** The page only reads public data. It has no field for a seed phrase or private key, and it cannot move funds.
+**Checking needs no wallet.** The page reads public data only. It has no field for a seed phrase or private key.
+
+**Prove and Claim (optional).** Each started withdrawal gets a button when it is ready: Prove, Claim, or, for USDB's last step, Claim DAI. Pressing one asks the visitor's own wallet (Rabby, MetaMask, any EIP-1193 / EIP-6963 wallet) to send one transaction on Ethereum to Blast's portal, or to Blast's DAI withdrawal queue. These call Blast's contracts directly, so they keep working after the bridge page closes. No token approvals, no message signatures. Any wallet can pay the gas, so a friend can finish someone else's withdrawal; the funds always go to the address set inside the withdrawal. Only the DAI claim must come from its recipient.
+
+Before the wallet is asked, the page rebuilds the transaction from Blast and Ethereum data and simulates it with `eth_estimateGas`: a proof must match the output root Blast posted on Ethereum, and a claim's gas limit comes from a simulation as `Constants.ESTIMATION_ADDRESS` (`0x…0001`), which makes the portal revert instead of finalizing a withdrawal whose payout would fail. The calldata is byte-for-byte what the command-line claimer this page grew out of builds (checked on 26 Oct 2026 for a prove and a claim).
 
 Unofficial community tool, not affiliated with Blast. Withdraw only through the official bridge at https://blast.io/en/bridge or the contracts in Blast's guide: https://docs.blast.io/withdrawals/withdraw-to-ethereum
 
 ## How it works
 
-Everything runs in the visitor's browser. There is no server, no analytics and no storage. The page is one file, `index.html`, plus two font files.
+Everything runs in the visitor's browser. There is no server, no analytics and no storage. The page is one file, `index.html`, plus two font files and, loaded only when a Prove / Claim button is pressed, `vendor/ethers-6.13.4.umd.min.js`: an unmodified copy of ethers.js 6.13.4 (`dist/ethers.umd.min.js`, MIT licence in `vendor/`), loaded with a subresource-integrity hash.
 
 | Service | Used for | Address sent? |
 |---|---|---|
@@ -28,7 +32,10 @@ Everything runs in the visitor's browser. There is no server, no analytics and n
 Contracts read on Ethereum, all through `eth_call`:
 - OptimismPortal `0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb`, functions `provenWithdrawals`, `finalizedWithdrawals` and `paused`
 - L2OutputOracle `0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76`, functions `latestOutputIndex`, `getL2Output` and `FINALIZATION_PERIOD_SECONDS`
-- ETH withdrawal queue `0x98078db053902644191f93988341E31289E1C8FE`, function `getLastFinalizedRequestId`
+- ETH withdrawal queue `0x98078db053902644191f93988341E31289E1C8FE`, function `getLastFinalizedRequestId` (and, for a claim, `getLastCheckpointId`, `findCheckpointHint`, `getClaimableEther`)
+- USDB→DAI withdrawal queue `0xa230285d5683C74935aD14c446e137c8c8828438`, functions `getWithdrawalRequests` and `getWithdrawalStatus` (and, for a DAI claim, the same hint functions)
+
+Transactions the buttons ask a wallet to send: `proveWithdrawalTransaction` and `finalizeWithdrawalTransaction` on the portal, `claimWithdrawal` on the DAI queue. A proof also reads `eth_getProof` from `rpc.blast.io`.
 
 Fee estimates use the medians of recent Blast portal transactions as of 24 Oct 2026: prove ≈ 429,500 gas and claim ≈ 241,100 gas, multiplied by the live Ethereum base fee plus a 0.02 gwei tip.
 
