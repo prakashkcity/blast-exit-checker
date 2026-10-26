@@ -52,6 +52,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* .row / label display rules must not unhide these */
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -210,14 +211,6 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
 .tip-addr code { font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; user-select: all; overflow-wrap: anywhere; min-width: 0; }
 .soon { align-content: start; }
 .soon .pill { width: fit-content; }
-.helped {
-  display: flex; gap: 12px; align-items: flex-start;
-  background: var(--ok-bg); color: var(--ink); border-left: 4px solid var(--sign); border-radius: 8px;
-  padding: 12px 16px; font-size: 1rem;
-}
-.helped-emoji { font-size: 1.5rem; line-height: 1.1; flex: none; }
-.helped b { color: var(--ok); }
-.helped a { font-weight: 700; color: var(--ok); }
 
 /* ---- prove / claim through the visitor's wallet ---- */
 button.act {
@@ -252,6 +245,37 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
 .act-amount {
   width: 11em; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
   font-family: var(--font-mono); font-size: 0.9rem;
+}
+
+/* ---- tip card: stays in view while the page scrolls. Beside the column where the screen has
+   room for it, otherwise a slim bar along the bottom (the body gets matching bottom padding). ---- */
+.tipfloat {
+  position: fixed; z-index: 20; left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 980px;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--sign); border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.14); padding: 8px 10px 8px 12px; font-size: 0.86rem; line-height: 1.35;
+}
+.tipfloat .t-emoji { font-size: 1.35rem; flex: none; }
+.tipfloat .t-text { flex: 1 1 auto; min-width: 0; }
+.tipfloat .t-text b { color: var(--ok); }
+.tipfloat .t-more { display: none; }
+.tipfloat .t-opt { color: var(--muted); font-size: 0.78rem; }
+.tipfloat button { flex: none; }
+@media (max-width: 1439px) { body { padding-bottom: 92px; } }
+@media (min-width: 720px) { .tipfloat .t-more { display: inline; } }
+@media (min-width: 1440px) {
+  .tipfloat {
+    left: auto; bottom: auto; top: 50%; transform: translateY(-50%); width: 212px; max-width: none;
+    right: max(12px, calc((100vw - 980px) / 4 - 106px)); flex-direction: column; align-items: stretch; gap: 8px; padding: 14px 14px 12px;
+  }
+  .tipfloat .t-emoji { font-size: 1.6rem; }
+  .tipfloat .t-more { display: inline; }
+}
+.tip-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tip-form label { display: grid; gap: 4px; font-size: 0.84rem; font-weight: 700; }
+.tip-form select, .tip-form input {
+  padding: 7px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; min-width: 0;
 }
 
 @media (max-width: 520px) {
@@ -369,6 +393,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="tip-addr">
       <code id="tip-address">0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2</code>
       <button class="primary" type="button" data-copy="0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2">Copy address</button>
+      <button class="ghost" type="button" data-tip-open>Tip with wallet</button>
     </div>
     <p class="small muted">Any token or NFT on any EVM chain (Ethereum, Base, Arbitrum, Abstract, Blast…), not Solana, Bitcoin or Tron. The checker works the same without a tip and nothing is unlocked by sending; no real tool asks you to pay to release your Blast funds.</p>
   </section>
@@ -429,6 +454,43 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <p>Contract addresses used: Blast portal on Ethereum <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>, ETH withdrawal queue <code>0x98078db053902644191f93988341E31289E1C8FE</code>, USDB→DAI withdrawal queue <code>0xa230285d5683C74935aD14c446e137c8c8828438</code>.</p>
   </footer>
 </div>
+
+<aside class="tipfloat" aria-label="Optional tip">
+  <span class="t-emoji" aria-hidden="true">🎉</span>
+  <span class="t-text"><b>Found something worth getting out?</b> <span class="t-more">If this saved you time or money, a tip is welcome.</span> <span class="t-opt">Entirely optional.</span></span>
+  <button class="act" type="button" id="tip-open">Tip jar</button>
+</aside>
+
+<dialog class="act-dlg" id="tip-dlg" aria-labelledby="tip-title">
+  <div class="act-head">
+    <h2 id="tip-title">Tip jar</h2>
+    <button class="ghost" type="button" id="tip-close">Close</button>
+  </div>
+  <div class="act-body">
+    <p class="act-what"><b>This is completely optional.</b> The checker works the same without a tip, and nothing is unlocked by sending.</p>
+    <div class="tip-addr">
+      <code>0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2</code>
+      <button class="ghost" type="button" data-copy="0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2">Copy address</button>
+    </div>
+    <p class="small muted">Send any token or NFT on any EVM chain to this address from your wallet, or choose here and your wallet opens with the tip filled in. You can change your mind and reject it there.</p>
+    <div class="tip-form">
+      <label>Network
+        <select id="tip-chain"><option value="1">Ethereum</option><option value="8453">Base</option><option value="42161">Arbitrum One</option><option value="10">OP Mainnet</option></select>
+      </label>
+      <label>Token
+        <select id="tip-token"><option value="native">ETH</option><option value="usdc">USDC</option><option value="other">Other token…</option></select>
+      </label>
+      <label id="tip-other" hidden>Token contract address
+        <input id="tip-token-addr" placeholder="0x…" spellcheck="false" autocomplete="off">
+      </label>
+      <label>Amount (any)
+        <input id="tip-amount" inputmode="decimal" placeholder="e.g. 0.001" autocomplete="off">
+      </label>
+    </div>
+    <div class="wallet-pick" id="tip-wallets"></div>
+    <p class="small" id="tip-msg" role="status"></p>
+  </div>
+</dialog>
 
 <dialog class="act-dlg" id="act-dlg" aria-labelledby="act-title">
   <div class="act-head">
@@ -1628,6 +1690,79 @@ $("act-amount").addEventListener("input", () => { if (cur) cur.isMax = false; })
 $("act-close").addEventListener("click", () => dlg.close());
 dlg.addEventListener("close", () => { cur = null; });
 
+// ---------------------------------------------------------------------------
+// Tip jar (optional). The visitor picks network, token and any amount on this page; the wallet then
+// opens with exactly that transfer and the visitor confirms or rejects it there. A wallet popup cannot
+// let the visitor choose the token or the amount itself, so the choice is made here first.
+// USDC addresses (symbol USDC, 6 decimals) and the add-network RPCs were checked on-chain 2026-10-26.
+// ---------------------------------------------------------------------------
+const TIP = "0xfa2F25f62c16EEF1Feb6E474eCaF525eB335C4b2";
+const ETHER = { name: "Ether", symbol: "ETH", decimals: 18 };
+const TIP_CHAINS = {
+  1: { name: "Ethereum", usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", scan: "https://etherscan.io/tx/", net: null },
+  8453: { name: "Base", usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", scan: "https://basescan.org/tx/",
+    net: { chainId: "0x2105", chainName: "Base", nativeCurrency: ETHER, rpcUrls: ["https://mainnet.base.org"], blockExplorerUrls: ["https://basescan.org"] } },
+  42161: { name: "Arbitrum One", usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", scan: "https://arbiscan.io/tx/",
+    net: { chainId: "0xa4b1", chainName: "Arbitrum One", nativeCurrency: ETHER, rpcUrls: ["https://arb1.arbitrum.io/rpc"], blockExplorerUrls: ["https://arbiscan.io"] } },
+  10: { name: "OP Mainnet", usdc: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", scan: "https://optimistic.etherscan.io/tx/",
+    net: { chainId: "0xa", chainName: "OP Mainnet", nativeCurrency: ETHER, rpcUrls: ["https://mainnet.optimism.io"], blockExplorerUrls: ["https://optimistic.etherscan.io"] } },
+};
+const tipDlg = $("tip-dlg");
+function tipMsg(html, bad) { const m = $("tip-msg"); m.innerHTML = html; m.style.color = bad ? "var(--bad)" : ""; }
+function openTip() {
+  tipMsg("");
+  const list = walletList();
+  $("tip-wallets").innerHTML = list.length
+    ? list.map((w, i) => `<button class="act" type="button" data-tip-wallet="${i}">${w.icon ? `<img alt="" src="${esc(w.icon)}"> ` : ""}Send with ${esc(w.name)}</button>`).join("")
+    : `<span class="small muted">No wallet found in this browser: copy the address above and send from any wallet.</span>`;
+  if (!tipDlg.open) tipDlg.showModal();
+}
+async function sendTip(i) {
+  const w = walletList()[i];
+  if (!w) return;
+  const chainId = Number($("tip-chain").value), c = TIP_CHAINS[chainId], kind = $("tip-token").value, text = $("tip-amount").value.trim();
+  if (!text) { tipMsg("Enter an amount first. Any amount is fine.", true); return; }
+  try {
+    tipMsg(`Waiting for ${esc(w.name)}…`);
+    const E = await loadEthers();
+    const toRaw = (dec) => { try { return E.parseUnits(text, dec); } catch { throw new Error("Enter the amount as a number, for example 0.001."); } };
+    if (kind === "native") toRaw(18);
+    const [from] = await w.provider.request({ method: "eth_requestAccounts" });
+    const want = "0x" + chainId.toString(16);
+    if (String(await w.provider.request({ method: "eth_chainId" })).toLowerCase() !== want) {
+      try { await w.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: want }] }); }
+      catch (e) {
+        if (e?.code === 4902 && c.net) await w.provider.request({ method: "wallet_addEthereumChain", params: [c.net] });
+        else throw e?.code === 4001 ? e : new Error(`Switch the wallet to ${c.name}, then try again.`);
+      }
+      if (String(await w.provider.request({ method: "eth_chainId" })).toLowerCase() !== want) throw new Error(`The wallet is not on ${c.name}.`);
+    }
+    let tx;
+    if (kind === "native") tx = { from, to: TIP, value: "0x" + toRaw(18).toString(16) };
+    else {
+      const token = kind === "usdc" ? c.usdc : $("tip-token-addr").value.trim();
+      if (!E.isAddress(token)) throw new Error("Paste the token's contract address (0x…).");
+      const I = new E.Interface(["function decimals() view returns (uint8)", "function transfer(address to, uint256 amount) returns (bool)"]);
+      const dec = kind === "usdc" ? 6 : Number(I.decodeFunctionResult("decimals",
+        await w.provider.request({ method: "eth_call", params: [{ to: token, data: I.encodeFunctionData("decimals") }, "latest"] }))[0]);
+      tx = { from, to: token, value: "0x0", data: I.encodeFunctionData("transfer", [TIP, toRaw(dec)]) };
+    }
+    tipMsg("Confirm or reject it in your wallet…");
+    const hash = await w.provider.request({ method: "eth_sendTransaction", params: [tx] });
+    tipMsg(`Thank you! Sent: <a class="mono" href="${c.scan}${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`);
+  } catch (e) {
+    tipMsg(esc(e?.code === 4001 ? "Cancelled in the wallet. Nothing was sent." : String(e?.message || e).slice(0, 200)), e?.code !== 4001);
+  }
+}
+$("tip-open").addEventListener("click", openTip);
+$("tip-close").addEventListener("click", () => tipDlg.close());
+$("tip-token").addEventListener("change", () => { $("tip-other").hidden = $("tip-token").value !== "other"; });
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tip-wallet]");
+  if (b) sendTip(Number(b.dataset.tipWallet));
+  if (e.target.closest("button[data-tip-open]")) openTip();
+});
+
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-copy]");
   if (!b) return;
@@ -1649,7 +1784,7 @@ $("check-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   const box = $("results");
   box.innerHTML = list.map((a, i) => `<article class="wallet" id="w-${i}"><p class="skeleton">${esc(short(a))} · reading Blast and Ethereum…</p></article>`).join("");
-  let done = 0, helped = false;
+  let done = 0;
   try {
     const ctx = await context();
     renderLive(ctx);
@@ -1657,8 +1792,6 @@ $("check-form").addEventListener("submit", async (e) => {
       let html;
       try {
         const res = await checkWallet(a);
-        if (res.tokens.some((t) => (t.usd || 0) >= 1) || res.deposits.some((d) => d.kind !== "debt" && (d.usd || 0) >= 1)
-          || res.withdrawals.some((w) => w.worth === true)) helped = true;
         html = walletCard(res, await context());
       }
       catch (err) { html = `<article class="wallet"><p class="err-box">${esc(short(a))}: could not check (${esc(err.message)}). Try again in a minute.</p></article>`; }
@@ -1666,7 +1799,6 @@ $("check-form").addEventListener("submit", async (e) => {
       done++;
       msg.textContent = done < list.length ? `Checked ${done} of ${list.length}…` : `Checked ${list.length} address${list.length > 1 ? "es" : ""} at ${new Date().toLocaleTimeString()}.`;
     });
-    if (helped) box.insertAdjacentHTML("beforeend", `<p class="helped"><span class="helped-emoji" aria-hidden="true">🎉</span><span><b>Found something worth getting out?</b> If this saved you time or money, the <a href="#tip">tip jar ↓</a> is below. Entirely optional.</span></p>`);
   } finally { btn.disabled = false; }
 });
 </script>
