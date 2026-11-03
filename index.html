@@ -679,6 +679,9 @@ async function getJson(url, tries = 4) {
 const isRevert = (e) => e && /revert|execution/i.test(e.message || "");
 // Over a rate limit, busy, or no answer at all: worth trying the same RPC again after a pause.
 const isLimit = (e) => e && (e.code === -32007 || /request limit|rate limit|too many requests/i.test(e.message || ""));
+// The RPC's own backend failing (rpc.blast.io, 2026-11-03: -32004 "failed to serve request" per
+// call in a batch, HTTP 503 for single calls) says nothing about the data: retry, then report it.
+const isBusy = (e) => e && (e.code === -32004 || /failed to serve|temporarily unavailable|upstream|timed? ?out/i.test(e.message || ""));
 const transient = (msg) => Object.assign(new Error(msg), { transient: true });
 
 // One sliding window per limit and host, shared by every check on the page (two wallets run at
@@ -715,7 +718,7 @@ function limitHit(url, message) {
   const host = new URL(url).host;
   const ms = /minute/i.test(message) ? 15000 : /second/i.test(message) ? 1500 : 3000;
   pausedUntil.set(host, Math.max(pausedUntil.get(host) || 0, Date.now() + ms));
-  return transient(`${host}: ${message}`);
+  return Object.assign(transient(`${host}: ${message}`), { limit: true });
 }
 async function postJson(url, body) {
   const host = new URL(url).host;
@@ -725,7 +728,7 @@ async function postJson(url, body) {
     r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
   } catch { throw transient(`${host} did not answer`); } // network error, timeout, or a 429 without CORS headers
   if (r.status === 429) throw limitHit(url, (await r.text().catch(() => "")).match(/"message"\s*:\s*"([^"]+)"/)?.[1] || "rate limit (HTTP 429)");
-  if (r.status >= 500) throw transient(`${host} is busy (HTTP ${r.status})`);
+  if (r.status >= 500) throw transient(`${host} is failing right now (HTTP ${r.status})`);
   if (!r.ok) throw new Error(`${host} answered HTTP ${r.status}`);
   return r.json();
 }
@@ -733,6 +736,7 @@ function itemResult(url, x) {
   if (!x.error) return x.result;
   if (isRevert(x.error)) return null;
   if (isLimit(x.error)) throw limitHit(url, x.error.message || "rate limit");
+  if (isBusy(x.error)) throw transient(`${new URL(url).host} is failing right now (${x.error.message})`);
   throw new Error(x.error.message || "RPC error");
 }
 async function postBatch(url, chunk) {
@@ -753,23 +757,28 @@ async function postSingles(url, chunk) {
 }
 // JSON-RPC: batches on the first endpoint (at most its per-second limit, else 40); single calls on
 // fallbacks (some cap batch size). A revert comes back as null. On the last endpoint, a busy or
-// rate-limited answer is retried (from the chunk that failed; throttle() holds the pause); any
-// other failure moves to the next endpoint, never to a fake 0.
+// rate-limited answer is retried (from the chunk that failed; throttle() holds the pause), unless
+// that RPC just failed a whole round of retries: then each call gets one try until it answers
+// again, so an outage is reported in seconds instead of a minute. Any other failure moves to the
+// next endpoint, never to a fake 0.
+const downUntil = new Map();
 async function rpc(urls, calls) {
   let lastErr;
   for (let u = 0; u < urls.length; u++) {
-    const size = Math.min(40, CFG.rpcLimits[new URL(urls[u]).host]?.perSec || 40);
-    const retries = u === urls.length - 1 ? 6 : 0;
+    const host = new URL(urls[u]).host;
+    const size = Math.min(40, CFG.rpcLimits[host]?.perSec || 40);
+    const retries = u === urls.length - 1 && !((downUntil.get(host) || 0) > Date.now()) ? 6 : 0;
     try {
       const out = [];
       for (let i = 0, tries = 0; i < calls.length;) {
         const chunk = calls.slice(i, i + size);
         try {
           out.push(...(u === 0 ? await postBatch(urls[u], chunk) : await postSingles(urls[u], chunk)));
-          i += size; tries = 0;
+          i += size; tries = 0; downUntil.delete(host);
         } catch (e) {
-          if (!e.transient || ++tries > retries) throw e;
-          await sleep(500 * tries);
+          if (e.transient && ++tries <= retries) { await sleep(500 * tries); continue; }
+          if (e.transient && !e.limit) downUntil.set(host, Date.now() + 30000);
+          throw e;
         }
       }
       return out;
@@ -954,7 +963,7 @@ async function checkWallet(a) {
     rpc(CFG.blastRpcs, [
       { method: "eth_getBalance", params: [a, "latest"] },
       call(USDB, SEL.balanceOf + arg(a)), call(WETH, SEL.balanceOf + arg(a)), call(BLAST, SEL.balanceOf + arg(a)),
-    ]).catch((e) => { res.errors.push("Blast balances: " + e.message); return null; }),
+    ]).catch((e) => { res.errors.push("Blast balances: " + e.message); res.blastUnread = true; return null; }),
     routescanNfts(a).catch((e) => { res.errors.push("NFTs: " + e.message); return []; }),
     // ETH on Ethereum pays for prove + claim.
     rpc(CFG.l1Rpcs, [{ method: "eth_getBalance", params: [a, "latest"] }]).then(([b]) => big(b)).catch(() => null),
@@ -1207,10 +1216,12 @@ function walletCard(res, ctx) {
   const withdrawable = res.tokens.filter((t) => t.withdrawable && t.usd != null).reduce((s, t) => s + t.usd, 0) + depositUsd;
   const allValue = res.tokens.reduce((s, t) => s + (t.usd || 0), 0) + depositUsd;
   const nftCount = res.nfts.reduce((s, g) => s + g.count, 0);
-  const nothing = !res.tokens.length && !res.unpriced.length && !res.withdrawals.length && !res.deposits.length && !nftCount;
+  // An unread balance is not a zero balance: never tell someone "nothing left" when Blast did not answer.
+  const nothing = !res.blastUnread && !res.tokens.length && !res.unpriced.length && !res.withdrawals.length && !res.deposits.length && !nftCount;
 
   let pill;
-  if (nothing && !res.errors.length) pill = `<span class="pill none">Nothing on Blast</span>`;
+  if (res.blastUnread) pill = `<span class="pill warn">Blast balances could not be read</span>`;
+  else if (nothing && !res.errors.length) pill = `<span class="pill none">Nothing on Blast</span>`;
   else if (!res.tokens.length && !res.deposits.length) pill = `<span class="pill none">No balance left on Blast</span>`;
   else if (exitFeeUsd == null) pill = `<span class="pill none">Fees unknown right now</span>`;
   else if (withdrawable > exitFeeUsd * 1.1) pill = `<span class="pill ok">Worth withdrawing</span>`;
@@ -1280,9 +1291,9 @@ function walletCard(res, ctx) {
     ${res.errors.length ? `<div class="err-box">Some data could not be read, so this result may be incomplete: ${esc(res.errors.join(" · "))}. Try again in a minute.</div>` : ""}
     ${nothing ? `<p class="empty">No balance and no bridge withdrawals found for this address on Blast.</p>` : `
     <div class="sum">
-      <div><b>${fmtUsd(allValue)}</b><span>Still on Blast</span></div>
+      <div><b>${res.blastUnread ? "?" : fmtUsd(allValue)}</b><span>${res.blastUnread ? "Still on Blast (could not read)" : "Still on Blast"}</span></div>
       <div><b>${exitFeeUsd != null ? fmtUsd(exitFeeUsd) : "?"}</b><span>Fees to withdraw it now</span></div>
-      <div><b>${keep != null ? fmtUsd(keep) : "?"}</b><span>You would keep</span></div>
+      <div><b>${keep != null && !res.blastUnread ? fmtUsd(keep) : "?"}</b><span>You would keep</span></div>
       ${l1Cell}
     </div>`}
     ${res.tokens.length || res.unpriced.length ? `
