@@ -26,7 +26,7 @@ Everything runs in the visitor's browser. There is no server, no analytics and n
 
 | Service | Used for | Address sent? |
 |---|---|---|
-| `rpc.blast.io`, `blast-rpc.publicnode.com` | Blast balances, transaction receipts | yes |
+| `rpc.blast.io` (the only keyless Blast RPC left; the page stays under its limits of 40 calls a second and 600 a minute) | Blast balances, transaction receipts | yes |
 | `ethereum-rpc.publicnode.com` (fallbacks `1rpc.io`, `cloudflare-eth.com`) | withdrawal status on the Blast portal, gas price | withdrawal IDs only |
 | `api.routescan.io` | token list and transaction history of the address | yes |
 | `api.coingecko.com`, `api.dexscreener.com` | prices | no |

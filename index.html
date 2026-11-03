@@ -448,7 +448,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="fold-body">
       <p class="small">Everything runs in your browser. There is no server and no tracking. Your address goes only to these public services:</p>
       <ul class="plain small">
-        <li><code>rpc.blast.io</code>, <code>blast-rpc.publicnode.com</code>: Blast balances and transactions</li>
+        <li><code>rpc.blast.io</code>: Blast balances and transactions (the only public Blast RPC still answering)</li>
         <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): withdrawal status on Ethereum, gas price</li>
         <li><code>api.routescan.io</code>: which tokens and NFTs an address holds, transaction history</li>
         <li><code>api.coingecko.com</code>, <code>api.dexscreener.com</code>: prices (no address sent)</li>
@@ -533,8 +533,15 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
 // ethers on 2026-10-24; gas figures are medians of recent Blast portal txs.
 // ---------------------------------------------------------------------------
 const CFG = {
-  blastRpcs: ["https://rpc.blast.io", "https://blast-rpc.publicnode.com"],
+  // rpc.blast.io is the only keyless Blast RPC still answering (2026-11-03: publicnode answers 503
+  // "no available nodes found for platform blast-rpc"; drpc, ankr, blockpi, 1rpc, tenderly, blastapi
+  // and nodies refuse, want a key, or are gone).
+  blastRpcs: ["https://rpc.blast.io"],
   l1Rpcs: ["https://ethereum-rpc.publicnode.com", "https://1rpc.io/eth", "https://cloudflare-eth.com"],
+  // What an RPC allows, counting every call inside a batch. rpc.blast.io answers "40/second request
+  // limit reached" or "600/minute request limit reached" per call, or HTTP 429 (2026-11-03); the
+  // page stays under both.
+  rpcLimits: { "rpc.blast.io": { perSec: 30, perMin: 540 } },
   routescan: "https://api.routescan.io/v2/network/mainnet/evm/81457",
   portal: "0x0ec68c5b10f21effb74f2a5c61dfe6b08c0db6cb",
   oracle: "0x826d1b0d4111ad9146eb8941d7ca2b6a44215c76",
@@ -670,39 +677,100 @@ async function getJson(url, tries = 4) {
 }
 
 const isRevert = (e) => e && /revert|execution/i.test(e.message || "");
+// Over a rate limit, busy, or no answer at all: worth trying the same RPC again after a pause.
+const isLimit = (e) => e && (e.code === -32007 || /request limit|rate limit|too many requests/i.test(e.message || ""));
+const transient = (msg) => Object.assign(new Error(msg), { transient: true });
+
+// One sliding window per limit and host, shared by every check on the page (two wallets run at
+// once), so the page never sends more calls than CFG.rpcLimits allows. A limit answer (from
+// another tab, say) pauses that host for every caller. rateWaitHook lets the form say why it waits.
+const sentAt = new Map(), pausedUntil = new Map();
+let rateWaitHook = null;
+async function throttle(url, n) {
+  const host = new URL(url).host, lim = CFG.rpcLimits[host];
+  if (!lim) return;
+  n = Math.min(n, lim.perSec);
+  if (!sentAt.has(host)) sentAt.set(host, []);
+  const stamps = sentAt.get(host);
+  for (;;) {
+    const now = Date.now();
+    let wait = (pausedUntil.get(host) || 0) - now;
+    if (wait <= 0) {
+      while (stamps.length && now - stamps[0] >= 60000) stamps.shift();
+      let inSec = 0;
+      for (let i = stamps.length - 1; i >= 0 && now - stamps[i] < 1000; i--) inSec++;
+      const overSec = inSec + n - lim.perSec, overMin = stamps.length + n - lim.perMin;
+      if (overSec <= 0 && overMin <= 0) { for (let i = 0; i < n; i++) stamps.push(now); return; }
+      // Wait until enough of the oldest calls have left the window that is full.
+      wait = Math.max(
+        overSec > 0 ? 1000 - (now - stamps[stamps.length - inSec + overSec - 1]) : 0,
+        overMin > 0 ? 60000 - (now - stamps[overMin - 1]) : 0,
+      ) + 25;
+    }
+    if (wait >= 2000 && rateWaitHook) rateWaitHook(wait);
+    await sleep(wait);
+  }
+}
+function limitHit(url, message) {
+  const host = new URL(url).host;
+  const ms = /minute/i.test(message) ? 15000 : /second/i.test(message) ? 1500 : 3000;
+  pausedUntil.set(host, Math.max(pausedUntil.get(host) || 0, Date.now() + ms));
+  return transient(`${host}: ${message}`);
+}
 async function postJson(url, body) {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
-  if (!r.ok) throw new Error(`${new URL(url).host} answered HTTP ${r.status}`);
+  const host = new URL(url).host;
+  await throttle(url, Array.isArray(body) ? body.length : 1);
+  let r;
+  try {
+    r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+  } catch { throw transient(`${host} did not answer`); } // network error, timeout, or a 429 without CORS headers
+  if (r.status === 429) throw limitHit(url, (await r.text().catch(() => "")).match(/"message"\s*:\s*"([^"]+)"/)?.[1] || "rate limit (HTTP 429)");
+  if (r.status >= 500) throw transient(`${host} is busy (HTTP ${r.status})`);
+  if (!r.ok) throw new Error(`${host} answered HTTP ${r.status}`);
   return r.json();
+}
+function itemResult(url, x) {
+  if (!x.error) return x.result;
+  if (isRevert(x.error)) return null;
+  if (isLimit(x.error)) throw limitHit(url, x.error.message || "rate limit");
+  throw new Error(x.error.message || "RPC error");
 }
 async function postBatch(url, chunk) {
   const j = await postJson(url, chunk.map((c, i) => ({ jsonrpc: "2.0", id: i, method: c.method, params: c.params })));
-  if (!Array.isArray(j)) throw new Error(`${new URL(url).host} refused a batch`);
+  if (!Array.isArray(j)) {
+    if (isLimit(j && j.error)) throw limitHit(url, j.error.message || "rate limit");
+    throw new Error(`${new URL(url).host} refused a batch`);
+  }
   const by = new Map(j.map((x) => [x.id, x]));
   return chunk.map((_, i) => {
     const x = by.get(i);
     if (!x) throw new Error(`${new URL(url).host} dropped part of a batch`);
-    if (x.error) { if (isRevert(x.error)) return null; throw new Error(x.error.message || "RPC error"); }
-    return x.result;
+    return itemResult(url, x);
   });
 }
 async function postSingles(url, chunk) {
-  return pool(chunk, 4, async (c) => {
-    const x = await postJson(url, { jsonrpc: "2.0", id: 1, method: c.method, params: c.params });
-    if (x.error) { if (isRevert(x.error)) return null; throw new Error(x.error.message || "RPC error"); }
-    return x.result;
-  });
+  return pool(chunk, 4, async (c) => itemResult(url, await postJson(url, { jsonrpc: "2.0", id: 1, method: c.method, params: c.params })));
 }
-// JSON-RPC: batches of 40 on the first endpoint; single calls on fallbacks (some cap batch size).
-// A revert comes back as null; any other failure moves to the next endpoint, never to a fake 0.
+// JSON-RPC: batches on the first endpoint (at most its per-second limit, else 40); single calls on
+// fallbacks (some cap batch size). A revert comes back as null. On the last endpoint, a busy or
+// rate-limited answer is retried (from the chunk that failed; throttle() holds the pause); any
+// other failure moves to the next endpoint, never to a fake 0.
 async function rpc(urls, calls) {
   let lastErr;
   for (let u = 0; u < urls.length; u++) {
+    const size = Math.min(40, CFG.rpcLimits[new URL(urls[u]).host]?.perSec || 40);
+    const retries = u === urls.length - 1 ? 6 : 0;
     try {
       const out = [];
-      for (let i = 0; i < calls.length; i += 40) {
-        const chunk = calls.slice(i, i + 40);
-        out.push(...(u === 0 ? await postBatch(urls[u], chunk) : await postSingles(urls[u], chunk)));
+      for (let i = 0, tries = 0; i < calls.length;) {
+        const chunk = calls.slice(i, i + size);
+        try {
+          out.push(...(u === 0 ? await postBatch(urls[u], chunk) : await postSingles(urls[u], chunk)));
+          i += size; tries = 0;
+        } catch (e) {
+          if (!e.transient || ++tries > retries) throw e;
+          await sleep(500 * tries);
+        }
       }
       return out;
     } catch (e) { lastErr = e; }
@@ -1341,14 +1409,19 @@ const listening = new WeakSet();
 // eth_estimateGas with the revert reason kept (rpc() turns reverts into null).
 async function simulate(tx, urls = CFG.l1Rpcs) {
   let last;
-  for (const url of urls) {
-    let j;
-    try { j = await postJson(url, { jsonrpc: "2.0", id: 1, method: "eth_estimateGas", params: [tx] }); }
-    catch (e) { last = e; continue; }
-    if (j.error) throw new Error(`The simulation failed (${String(j.error.message || "reverted").slice(0, 140)}), so nothing will be sent.`);
-    return big(j.result);
+  for (let u = 0; u < urls.length; u++) {
+    const retries = u === urls.length - 1 ? 4 : 0;
+    for (let tries = 0; ; tries++) {
+      let j;
+      try { j = await postJson(urls[u], { jsonrpc: "2.0", id: 1, method: "eth_estimateGas", params: [tx] }); }
+      catch (e) { last = e; if (e.transient && tries < retries) { await sleep(1500 * (tries + 1)); continue; } break; }
+      // A rate-limit answer is not a verdict on the transaction: wait and ask again.
+      if (j.error && isLimit(j.error)) { last = limitHit(urls[u], j.error.message || "rate limit"); if (tries < retries) { await sleep(500 * (tries + 1)); continue; } break; }
+      if (j.error) throw new Error(`The simulation failed (${String(j.error.message || "reverted").slice(0, 140)}), so nothing will be sent.`);
+      return big(j.result);
+    }
   }
-  throw last || new Error("No Ethereum RPC answered.");
+  throw last || new Error("No RPC answered.");
 }
 // Who receives the funds: the bridge message's recipient, else the withdrawal's target.
 function receiverOf(E, wtx) {
@@ -1795,6 +1868,9 @@ $("check-form").addEventListener("submit", async (e) => {
   const box = $("results");
   box.innerHTML = list.map((a, i) => `<article class="wallet" id="w-${i}"><p class="skeleton">${esc(short(a))} · reading Blast and Ethereum…</p></article>`).join("");
   let done = 0;
+  const progress = () => (done ? `Checked ${done} of ${list.length}…` : msg.textContent.replace(/ Waiting.*$/, ""));
+  // Big wallets need many calls, and rpc.blast.io allows 600 a minute: say so instead of looking stuck.
+  rateWaitHook = (ms) => { if (done < list.length) msg.textContent = `${progress()} Waiting ~${Math.ceil(ms / 1000)} s: Blast's only public RPC allows 600 calls a minute.`; };
   try {
     const ctx = await context();
     renderLive(ctx);
@@ -1809,7 +1885,7 @@ $("check-form").addEventListener("submit", async (e) => {
       done++;
       msg.textContent = done < list.length ? `Checked ${done} of ${list.length}…` : `Checked ${list.length} address${list.length > 1 ? "es" : ""} at ${new Date().toLocaleTimeString()}.`;
     });
-  } finally { btn.disabled = false; }
+  } finally { btn.disabled = false; rateWaitHook = null; }
 });
 </script>
 </body>
