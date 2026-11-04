@@ -231,6 +231,8 @@ button.act, a.act {
 a.act { text-decoration: none; }
 button.act:hover, a.act:hover { background: var(--sign-deep); color: var(--sign-ink); }
 button.act.soft { background: transparent; color: var(--sign); border: 1.5px solid var(--sign); }
+.claim-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--ok-bg); border-radius: 8px; padding: 10px 12px; }
+.claim-top a { font-weight: 700; }
 dialog.act-dlg {
   width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
   border: 1px solid var(--line); border-radius: var(--r); padding: 0; background: var(--surface); color: var(--ink);
@@ -974,8 +976,8 @@ async function recoveryEntry(list, a) {
   const m = await recoveryManifest(list);
   const e = (await recoveryFile(`${CFG.recoveryBase}${list.id}/shards/${a.slice(2, 2 + m.shardPrefixLength)}.json`, {}))[a];
   if (!e) return null;
-  const [ethWei, daiWei, , , redeemers = [], pending = 0] = e;
-  return { ...list, account: a, ethWei: BigInt(ethWei), daiWei: BigInt(daiWei), redeemers: redeemers.length, pending: Number(pending) || 0, claimed: null, paused: null };
+  const [ethWei, daiWei, tree, leaf, redeemers = [], pending = 0] = e;
+  return { ...list, account: a, ethWei: BigInt(ethWei), daiWei: BigInt(daiWei), tree: Number(tree), leaf: Number(leaf), redeemerList: redeemers, redeemers: redeemers.length, pending: Number(pending) || 0, claimed: null, paused: null };
 }
 // Other accounts this wallet is approved to claim for: Safes and contracts it owns or deployed. blast.io
 // reads the same redeemers files, and some of these accounts hold far more than the wallet itself.
@@ -1297,18 +1299,27 @@ function recoverySection(res, ctx) {
     const notes = [!own ? "this wallet is approved to claim it" : r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.pending ? "includes an unfinished withdrawal" : "", r.claimed !== true && sums.dust(r) ? "worth less than its fee" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
     const who = own ? esc(r.label) : `<a class="mono" href="https://blastexplorer.io/address/${esc(r.account)}" target="_blank" rel="noopener noreferrer">${esc(short(r.account))}</a> · ${esc(r.label)}`;
     const status = r.claimed === true ? `<span class="pill ok">Claimed</span>` : r.claimed === false ? `<span class="pill warn">Not claimed yet</span>` : `<span class="pill none">Claim status unknown</span>`;
-    return `<tr><td>${who}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td></tr>`;
+    const button = sums.open.length > 1 && r.claimed !== true && r.paused !== true ? claimButton(res, [r], "Claim", sums.dust(r) ? "act soft" : "act") : "";
+    return `<tr><td>${who}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td><td>${button}</td></tr>`;
   }).join("");
   return `
     <h3>Blast recovery</h3>
     ${others ? `<p class="small">This wallet is approved to claim for ${others} other account${others > 1 ? "s" : ""}, such as a Safe or a contract it deployed. Their funds are listed here too.</p>` : ""}
     <div class="table-wrap"><table>
-      <thead><tr><th>Account and list</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th></tr></thead>
+      <thead><tr><th>Account and list</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
     ${rc.moreAccounts ? `<p class="small muted">${rc.moreAccounts} more approved account${rc.moreAccounts > 1 ? "s are" : " is"} not shown, so the total above may be low. blast.io lists them all.</p>` : ""}
-    ${sums.open.length ? `<div class="row"><a class="act" href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">Claim at blast.io</a><span class="small muted">Blast charges no service fee, only Ethereum gas: one transaction per list and account, sent by this wallet or a wallet approved for it. The ETH and DAI go to the wallet that sends it.</span></div>` : ""}
-    ${sums.usd >= 25 ? `<p class="small muted">This checker is free, and so is Blast's claim. If it helped you find money you had forgotten, a tip is welcome and never required. <button class="ghost" type="button" data-tip-open>Tip jar</button></p>` : ""}`;
+    ${sums.open.length ? `<p class="small muted">Each list and account is its own claim. Only this wallet or a wallet approved for it can send one, and the ETH and DAI go to the wallet that sends it, so another wallet cannot pay the gas for it. A Safe claims through <a href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">blast.io</a>.</p>` : ""}
+    ${sums.usd >= 25 ? `<p class="small muted">This checker is free, and so is the claim. If it helped you find money you had forgotten, a tip is welcome and never required. <button class="ghost" type="button" data-tip-open>Tip jar</button></p>` : ""}`;
+}
+// The claim button at the top of a wallet card.
+function claimTop(res, ctx) {
+  const s = recoverySums(res, ctx), live = s.open.filter((r) => r.paused !== true);
+  if (!s.open.length) return "";
+  if (!live.length) return `<p class="err-box">Blast has paused claims on its contract, so nothing can be claimed right now.</p>`;
+  const worth = live.filter((r) => !s.dust(r));
+  return `<div class="claim-top">${claimButton(res, worth.length ? worth : live, s.usd != null ? `Claim ${fmtUsd(s.usd)}` : "Claim", worth.length ? "primary" : "act soft")}<span class="small muted">No service fee, only Ethereum gas. You can also claim on <a href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">blast.io</a>, Blast's own page.</span></div>`;
 }
 function walletCard(res, ctx) {
   // Unknown counts as closed: hiding a route that works costs less than offering one that cannot finish.
@@ -1403,6 +1414,7 @@ function walletCard(res, ctx) {
       <div class="row">${pill}</div>
     </header>
     ${res.errors.length ? `<div class="err-box">${closed && !res.recovery?.error ? "Some Blast chain data could not be read, so the lists below may be incomplete. The recovery amount comes from blast.io and Ethereum and is not affected" : "Some data could not be read, so this result may be incomplete"}: ${esc(res.errors.join(" · "))}. Try again in a minute.</div>` : ""}
+    ${claimTop(res, ctx)}
     ${closed ? (rec.open.length ? `
     <div class="sum">
       <div><b>${fmtUsd(rec.usd)}</b><span>To claim on Ethereum</span></div>
@@ -1488,6 +1500,11 @@ const ABI = {
   ],
   weth: ["function withdraw(uint256 wad)", "function balanceOf(address) view returns (uint256)"],
   gasOracle: ["function getL1Fee(bytes) view returns (uint256)"],
+  recovery: [
+    "function claim(address user, uint256 ethAmount, uint256 usdAmount, address[] _redeemers, bytes32[] proof, bytes32 root)",
+    "function isApprovedRedeemer(address user, address[] _redeemers, address redeemer) view returns (bool)",
+    "function roots(bytes32) view returns (bool)",
+  ],
   bridge: [
     "function relayMessage(uint256 _nonce, address _sender, address _target, uint256 _value, uint256 _minGasLimit, bytes _message)",
     "function finalizeBridgeETH(address _from, address _to, uint256 _amount, bytes _extraData)",
@@ -1501,6 +1518,15 @@ function actButton(w, owner) {
   ACTS.set(id, { kind: w.act, owner: owner.toLowerCase(), w });
   const label = w.act === "prove" ? "Prove" : w.act === "dai" ? "Claim DAI" : "Claim";
   return `<button class="act${w.worth === false ? " soft" : ""}" type="button" data-act="${id}" title="${w.worth === false ? "The Ethereum fee is higher than the value right now" : "Send this step from a wallet"}">${label}</button>`;
+}
+
+// Claim buttons on a wallet card: one for everything worth claiming, one per row when there are several.
+function claimButton(res, rows, label, cls) {
+  const id = "a" + ++actSeq;
+  const e = rows.reduce((s, r) => s + r.ethWei, 0n), d = rows.reduce((s, r) => s + r.daiWei, 0n);
+  const what = [e > 0n ? `${fmtAmt(eth(e))} ETH` : "", d > 0n ? `${fmtAmt(units(d, 18))} DAI` : ""].filter(Boolean).join(" + ") || "nothing";
+  ACTS.set(id, { kind: "recovery", owner: res.address.toLowerCase(), w: { rows, what } });
+  return `<button class="${cls}" type="button" data-act="${id}">${esc(label)}</button>`;
 }
 
 // "On Blast now" rows: start a withdrawal (ETH, USDB) or unwrap WETH, sent by the holder itself.
@@ -1611,9 +1637,105 @@ async function buildStart(E, a, amountRaw) {
     expectedWei: gas * maxFee + big(l1Hex), needWei: tx.value + reserve, onlyFrom: owner, maxAmount, amount, receiver: owner, receive: what, summary };
 }
 
+// ---------------------------------------------------------------------------
+// Claim from Blast's recovery (optional, no service fee). The page builds the same claim() call as
+// blast.io, from the same public files, and asks the wallet to send it. BlastExit checks the Merkle
+// proof and pays the ETH and DAI to the sender, which must be the listed account or a wallet approved
+// for it. Before anything is sent the proof must rebuild the root in Blast's manifest, the contract
+// must accept that root and not be paused, the account must be unclaimed, the wallet must be
+// approved, and the call must simulate from that wallet.
+// ---------------------------------------------------------------------------
+const treeDepth = (i) => 31 - Math.clz32(i + 1);
+function chunkOf(node, depth) {
+  while (treeDepth(node) > depth) node = (node - 1) >> 1;
+  return node - (2 ** depth - 1);
+}
+// A chunk file holds the top of the tree, then one subtree level by level; this is a node's slot in it.
+function chunkSlot(node, chunk, depth, total) {
+  const level = treeDepth(node);
+  if (level <= depth) return node;
+  const top = 2 ** depth - 1 + chunk;
+  let slot = Math.min(2 ** (depth + 1) - 1, total);
+  for (let l = 1; l < level - depth; l++) {
+    const first = (top + 1) * 2 ** l - 1;
+    slot += Math.max(0, Math.min(total, first + 2 ** l) - first);
+  }
+  const first = (top + 1) * 2 ** (level - depth) - 1;
+  if (node < first || node >= first + 2 ** (level - depth)) throw new Error("Blast's proof data does not fit this account, so nothing will be sent.");
+  return slot + (node - first);
+}
+const recoveryChunks = new Map();
+function recoveryChunk(id, tree, chunk) {
+  const url = `${CFG.recoveryBase}${id}/trees/${tree}/${chunk}.bin`;
+  if (!recoveryChunks.has(url)) {
+    const p = fetch(url, { signal: AbortSignal.timeout(30000) }).then(async (r) => {
+      if (!r.ok || (r.headers.get("content-type") || "").includes("html")) throw new Error(`blast.io did not send the proof data (HTTP ${r.status}). Try again in a minute.`);
+      return new Uint8Array(await r.arrayBuffer());
+    });
+    recoveryChunks.set(url, p);
+    p.catch(() => recoveryChunks.delete(url));
+  }
+  return recoveryChunks.get(url);
+}
+async function recoveryProof(E, row) {
+  const m = await recoveryManifest(row);
+  const tree = m.trees?.[row.tree];
+  if (!tree || !m.chunkDepth) throw new Error("blast.io changed its claim data format, so nothing will be sent.");
+  const total = 2 * tree.leaves - 1, chunk = chunkOf(row.leaf, m.chunkDepth);
+  const bytes = await recoveryChunk(row.id, row.tree, chunk);
+  const node = (i) => {
+    const at = chunkSlot(i, chunk, m.chunkDepth, total) * 32;
+    if (at + 32 > bytes.length) throw new Error("Blast's proof data is cut short, so nothing will be sent.");
+    return E.hexlify(bytes.subarray(at, at + 32));
+  };
+  const proof = [];
+  for (let i = row.leaf; i > 0; i = (i - 1) >> 1) proof.push(node(i % 2 ? i + 1 : i - 1));
+  const listed = E.keccak256(E.solidityPacked(["address[]"], [row.redeemerList]));
+  const leaf = E.keccak256(E.keccak256(E.AbiCoder.defaultAbiCoder().encode(["address", "uint256", "uint256", "bytes32"], [row.account, row.ethWei, row.daiWei, listed])));
+  const root = proof.reduce((h, s) => E.keccak256(E.concat(h < s ? [h, s] : [s, h])), leaf);
+  if (node(row.leaf) !== leaf || root !== String(tree.root).toLowerCase()) throw new Error("Blast's proof does not match this account's amounts, so nothing will be sent.");
+  return { proof, root };
+}
+// The claims for these rows that are still open. Any doubt stops here: a missing answer is not a "yes".
+async function buildRecovery(E, a) {
+  const I = new E.Interface(ABI.recovery);
+  const built = await pool(a.w.rows, 3, async (row) => {
+    const { proof, root } = await recoveryProof(E, row);
+    return { row, root, to: row.address, data: I.encodeFunctionData("claim", [row.account, row.ethWei, row.daiWei, row.redeemerList, proof, root]) };
+  });
+  const st = await rpc(CFG.l1Rpcs, built.flatMap((c) => [call(c.to, SEL.paused), call(c.to, I.encodeFunctionData("roots", [c.root])), call(c.to, SEL.claimed + arg(c.row.account))]));
+  if (st.some((x) => x == null)) throw new Error("Ethereum did not answer, so nothing will be sent. Try again in a minute.");
+  const claims = built.filter((c, i) => {
+    if (big(st[3 * i]) !== 0n) throw new Error("Blast has paused claims on this contract. Nothing can be claimed right now.");
+    if (big(st[3 * i + 1]) === 0n) throw new Error("Blast's contract no longer accepts this proof, so nothing will be sent. Check the address on blast.io.");
+    return big(st[3 * i + 2]) === 0n;
+  });
+  if (!claims.length) throw new Error("Already claimed. Check the address again to refresh it.");
+  const ethWei = claims.reduce((s, c) => s + c.row.ethWei, 0n), daiWei = claims.reduce((s, c) => s + c.row.daiWei, 0n);
+  const receive = [ethWei > 0n ? `${fmtAmt(eth(ethWei))} ETH` : "", daiWei > 0n ? `${fmtAmt(units(daiWei, 18))} DAI` : ""].filter(Boolean).join(" + ") || "nothing";
+  return { recovery: true, claims, receive, summary: `Checked: ${claims.length > 1 ? `${claims.length} claims` : "the claim"} for ${receive}. The proof matches Blast's data and the contract accepts it.` };
+}
+// The claims this wallet may send, simulated from it. The gas limit comes from here.
+async function fitClaims(E, b, who) {
+  const I = new E.Interface(ABI.recovery);
+  const ok = await rpc(CFG.l1Rpcs, b.claims.map((c) => call(c.to, I.encodeFunctionData("isApprovedRedeemer", [c.row.account, c.row.redeemerList, who]))));
+  const mine = b.claims.filter((_, i) => ok[i] != null && big(ok[i]) !== 0n);
+  await pool(mine, 3, async (c) => { c.gas = await simulate({ from: who, to: c.to, data: c.data }); });
+  return mine;
+}
+// EIP-5792: can this wallet send several calls as one transaction? Most wallets answer no or throw.
+async function canBatch(provider, who) {
+  try {
+    const caps = await provider.request({ method: "wallet_getCapabilities", params: [who, ["0x1"]] });
+    const status = caps?.["0x1"]?.atomic?.status;
+    return status === "supported" || status === "ready";
+  } catch { return false; }
+}
+
 // Everything the wallet will be asked to send, built and simulated. Throws a plain-language reason otherwise.
 async function buildAct(a, amountRaw) {
   const E = await loadEthers();
+  if (a.kind === "recovery") return buildRecovery(E, a);
   if (a.kind === "start-eth" || a.kind === "start-usdb" || a.kind === "unwrap") return buildStart(E, a, amountRaw);
   const ac = E.AbiCoder.defaultAbiCoder();
   const P = new E.Interface(ABI.portal), O = new E.Interface(ABI.oracle), Q = new E.Interface(ABI.queue);
@@ -1705,7 +1827,7 @@ const dlg = $("act-dlg");
 let cur = null; // the open action: { a, built, token }
 const START = new Set(["start-eth", "start-usdb", "unwrap"]); // sent on Blast by the holder
 const BLAST_NET = { chainId: "0x13e31", chainName: "Blast", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.blast.io"], blockExplorerUrls: ["https://blastexplorer.io"] };
-const TITLES = { prove: "Prove this withdrawal", claim: "Claim this withdrawal", dai: "Claim the DAI",
+const TITLES = { prove: "Prove this withdrawal", claim: "Claim this withdrawal", dai: "Claim the DAI", recovery: "Claim from Blast's recovery",
   "start-eth": "Withdraw ETH from Blast", "start-usdb": "Withdraw USDB from Blast (arrives as DAI)", unwrap: "Unwrap WETH on Blast" };
 function step(id, state, html) { const li = $(id); li.className = state || ""; if (html != null) li.querySelector(".msg").innerHTML = html; }
 function walletErr(e) {
@@ -1719,21 +1841,26 @@ async function openAct(id) {
   if (!a) return;
   const token = {};
   cur = { a, built: null, token };
-  const start = START.has(a.kind);
+  const start = START.has(a.kind), rec = a.kind === "recovery";
   $("act-title").textContent = TITLES[a.kind];
-  $("act-what").innerHTML = start
+  $("act-what").innerHTML = rec
+    ? `${esc(a.w.what)} · for <span class="mono">${esc(short(a.owner))}</span> · no service fee`
+    : start
     ? `${esc(fmtAmt(a.w.amount ?? 0))} ${esc(a.w.asset)} on Blast · held by <span class="mono">${esc(short(a.owner))}</span>`
     : `${esc(fmtAmt(a.w.amount ?? 0))} ${esc(a.w.asset)} · withdrawn by <span class="mono">${esc(short(a.owner))}</span> · started ${esc(fmtWhen(a.w.time))}`;
   // The contract the wallet will show, checksummed as wallets show it.
   const to = a.kind === "dai" ? "0xa230285d5683C74935aD14c446e137c8c8828438" : a.kind === "unwrap" ? WETH : start ? CFG.l2Bridge : "0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb";
-  $("act-safety").innerHTML = `Your wallet should show one transaction on <b>${start ? "Blast" : "Ethereum"}</b> to <code>${esc(to)}</code>, ${a.kind === "start-eth" ? "sending the amount above in ETH" : "sending 0 ETH"}. No token approval, no message to sign. `
-    + (start ? "Only the address that holds the funds can start this, and they arrive at the same address on Ethereum." : "Keep the gas limit the wallet shows; lowering it can make a claim fail. The page cannot change where the funds go.");
-  $("st-wallet").querySelector("b").textContent = start ? "Wallet that holds it" : "Wallet that pays the gas";
+  $("act-safety").innerHTML = rec
+    ? `Your wallet should show a transaction on <b>Ethereum</b> to Blast's recovery contract <code>0x9D31771458B421C7EA8A06CB8D12663E91617869</code> or <code>0x23eA8c6ACEb5673BBd712137cE2Aa33db36CB513</code>, sending 0 ETH. No token approval, no message to sign, no service fee. The ETH and DAI go to the wallet that sends it. If your wallet offers a smart-account upgrade to send it as one transaction, that upgrade comes from your wallet, not from this page.`
+    : `Your wallet should show one transaction on <b>${start ? "Blast" : "Ethereum"}</b> to <code>${esc(to)}</code>, ${a.kind === "start-eth" ? "sending the amount above in ETH" : "sending 0 ETH"}. No token approval, no message to sign. `
+      + (start ? "Only the address that holds the funds can start this, and they arrive at the same address on Ethereum." : "Keep the gas limit the wallet shows; lowering it can make a claim fail. The page cannot change where the funds go.");
+  $("st-wallet").querySelector("b").textContent = rec ? "Wallet that claims" : start ? "Wallet that holds it" : "Wallet that pays the gas";
   $("st-done").querySelector("b").textContent = start ? "On Blast" : "On Ethereum";
   $("act-amount-row").hidden = !start;
   $("act-amount").value = "";
-  $("act-unit").textContent = a.kind === "unwrap" ? "WETH" : a.w.asset;
+  $("act-unit").textContent = a.kind === "unwrap" ? "WETH" : a.w.asset ?? "";
   for (const s of ["st-check", "st-wallet", "st-send", "st-done"]) step(s, "", "");
+  $("act-send").textContent = rec ? "Claim" : "Send from wallet";
   $("act-send").disabled = true;
   renderWallets();
   if (!dlg.open) dlg.showModal();
@@ -1769,33 +1896,67 @@ function renderWallets() {
     box.innerHTML = "";
     return;
   }
-  step("st-wallet", "", a && START.has(a.kind) ? "Pick the wallet that holds these funds on Blast." : "Pick the wallet that pays the Ethereum gas. Any wallet can pay; it does not have to be the one that withdrew.");
+  step("st-wallet", "", a?.kind === "recovery" ? "Pick the wallet that held these funds on Blast, or a wallet approved for this account." : a && START.has(a.kind) ? "Pick the wallet that holds these funds on Blast." : "Pick the wallet that pays the Ethereum gas. Any wallet can pay; it does not have to be the one that withdrew.");
   box.innerHTML = list.map((w, i) => `<button class="ghost" type="button" data-wallet="${i}">${w.icon ? `<img alt="" src="${esc(w.icon)}">` : ""}${esc(w.name)}</button>`).join("");
 }
 
+// Connects a wallet for this page; throws if the visitor refuses.
+async function linkWallet(w) {
+  const accs = await w.provider.request({ method: "eth_requestAccounts" });
+  if (!accs?.length) throw new Error("The wallet returned no account.");
+  conn = { provider: w.provider, name: w.name, account: String(accs[0]).toLowerCase() };
+  if (!listening.has(w.provider) && w.provider.on) {
+    listening.add(w.provider);
+    w.provider.on("accountsChanged", (x) => {
+      if (conn?.provider !== w.provider) return;
+      const acc = String(x?.[0] || "").toLowerCase();
+      conn = acc ? { ...conn, account: acc } : null;
+      renderWallets(); refreshSend();
+    });
+  }
+}
 async function connectWallet(i) {
   const w = walletList()[i];
   if (!w) return;
   step("st-wallet", "doing", `Waiting for ${esc(w.name)}…`);
-  try {
-    const accs = await w.provider.request({ method: "eth_requestAccounts" });
-    if (!accs?.length) throw new Error("The wallet returned no account.");
-    conn = { provider: w.provider, name: w.name, account: String(accs[0]).toLowerCase() };
-    if (!listening.has(w.provider) && w.provider.on) {
-      listening.add(w.provider);
-      w.provider.on("accountsChanged", (x) => {
-        if (conn?.provider !== w.provider) return;
-        const acc = String(x?.[0] || "").toLowerCase();
-        conn = acc ? { ...conn, account: acc } : null;
-        renderWallets(); refreshSend();
-      });
-    }
-  } catch (e) { conn = null; step("st-wallet", "fail", esc(walletErr(e))); return; }
+  try { await linkWallet(w); }
+  catch (e) { conn = null; step("st-wallet", "fail", esc(walletErr(e))); return; }
   renderWallets();
   refreshSend();
 }
 
+// Recovery claims: what this wallet may claim, the gas for it, and whether it has the ETH to pay.
+async function refreshClaim() {
+  const b = cur?.built, a = cur?.a, token = cur?.token;
+  $("act-send").disabled = true;
+  if (!b) { step("st-send", "", ""); return; }
+  if (!conn) { step("st-send", "", "Connect a wallet first."); return; }
+  const who = conn.account;
+  step("st-send", "doing", "Simulating the claim from this wallet…");
+  try {
+    const E = await loadEthers();
+    const mine = await fitClaims(E, b, who);
+    if (cur?.token !== token || conn?.account !== who) return;
+    if (!mine.length) { step("st-send", "fail", `This wallet cannot claim this. Switch to <span class="mono">${esc(short(a.owner))}</span>, or a wallet approved for it.`); return; }
+    b.batch = mine.length > 1 && await canBatch(conn.provider, who);
+    if (cur?.token !== token) return;
+    const ctx = await context();
+    const feeWei = costWei(ctx, mine.reduce((s, c) => s + c.gas, 0n));
+    const skipped = b.claims.length - mine.length;
+    $("act-send").textContent = b.batch ? `Claim in one transaction (${mine.length} claims)` : mine.length > 1 ? `Claim (${mine.length} transactions)` : "Claim";
+    step("st-send", "", `${feeWei != null ? `About ${esc(fmtAmt(eth(feeWei)))} ETH (${esc(fmtUsd(toUsd(ctx, feeWei)))}) in Ethereum gas at today's price. ` : ""}No service fee.${skipped ? ` This wallet can send ${mine.length} of the ${b.claims.length} claims.` : ""}`);
+    const [bal] = await rpc(CFG.l1Rpcs, [{ method: "eth_getBalance", params: [who, "latest"] }]).catch(() => [null]);
+    if (cur?.token !== token) return;
+    if (bal != null && feeWei != null && big(bal) < feeWei) { step("st-send", "fail", `This wallet holds ${esc(fmtAmt(eth(big(bal))))} ETH on Ethereum, less than the gas needed (about ${esc(fmtAmt(eth(feeWei)))} ETH). Add a little ETH on Ethereum first.`); return; }
+    $("act-send").disabled = false;
+  } catch (e) {
+    if (cur?.token !== token) return;
+    step("st-send", "fail", esc(e?.message || String(e)));
+  }
+}
+
 async function refreshSend() {
+  if (cur?.a?.kind === "recovery") return refreshClaim();
   const b = cur?.built, a = cur?.a, token = cur?.token;
   const allowed = !!(b && conn && !(b.onlyFrom && conn.account !== b.onlyFrom));
   $("act-send").disabled = !allowed;
@@ -1831,9 +1992,91 @@ async function onChain(provider, chainId) {
   if (String(await provider.request({ method: "eth_chainId" })).toLowerCase() !== want) throw new Error(`The wallet is not on ${name}. Switch it, then press Send again.`);
 }
 
+// Waits for one claim on Ethereum. Throws if it failed; returns null if the dialog moved on.
+async function claimReceipt(hash, token) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 15 * 60000) {
+    await sleep(4000);
+    if (cur?.token !== token) return null;
+    let rc = null;
+    try { [rc] = await rpc(CFG.l1Rpcs, [{ method: "eth_getTransactionReceipt", params: [hash] }]); } catch { continue; }
+    if (!rc) continue;
+    if (big(rc.status) !== 1n) throw new Error(`The claim failed on Ethereum (block ${big(rc.blockNumber)}). Nothing was paid; see the wallet's activity.`);
+    return rc;
+  }
+  throw new Error("Still not included after 15 minutes; gas may have been set low. Check your wallet's activity before trying again.");
+}
+// EIP-5792: the wallet sent the calls together; ask it how that went.
+async function batchReceipt(provider, id, token) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 15 * 60000) {
+    await sleep(4000);
+    if (cur?.token !== token) return null;
+    const s = await provider.request({ method: "wallet_getCallsStatus", params: [id] }).catch(() => null);
+    if (!s || s.status === 100) continue;
+    if (s.status !== 200 || s.receipts?.length !== 1 || s.receipts[0].status !== "0x1") throw new Error("The wallet reported that the batch did not go through. Check its activity before trying again.");
+    return s.receipts[0];
+  }
+  throw new Error("Still not confirmed after 15 minutes. Check your wallet's activity before trying again.");
+}
+const txLink = (hash) => `<a class="mono" href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`;
+
+async function sendClaims() {
+  const a = cur.a, token = cur.token;
+  $("act-send").disabled = true;
+  const sent = [];
+  try {
+    step("st-send", "doing", "Checking the wallet is on Ethereum…");
+    await onChain(conn.provider, 1);
+    // Build and check everything again right before sending: anything may have changed since the dialog opened.
+    step("st-send", "doing", "Rechecking every claim…");
+    const b = await buildAct(a);
+    const E = await loadEthers();
+    const who = conn.account, mine = await fitClaims(E, b, who);
+    if (cur?.token !== token) return;
+    if (!mine.length) throw new Error("This wallet cannot claim this any more. Check the address again.");
+    const batch = mine.length > 1 && await canBatch(conn.provider, who);
+    cur.built = b;
+    const hex = (v) => "0x" + v.toString(16);
+    if (batch) {
+      step("st-send", "doing", "Confirm the claim in your wallet. It may ask to enable its smart-account upgrade first.");
+      const r = await conn.provider.request({ method: "wallet_sendCalls", params: [{ version: "2.0.0", from: who, chainId: "0x1", atomicRequired: true, calls: mine.map((c) => ({ to: c.to, data: c.data, value: "0x0" })) }] });
+      const id = typeof r === "string" ? r : r?.id;
+      if (!id) throw new Error("The wallet returned no batch id. Check its activity before trying again.");
+      step("st-send", "done", "Sent to your wallet as one transaction.");
+      step("st-done", "doing", "Waiting for Ethereum to include it (usually within a minute)…");
+      const rc = await batchReceipt(conn.provider, id, token);
+      if (!rc) return;
+      sent.push(rc.transactionHash);
+    } else {
+      for (let i = 0; i < mine.length; i++) {
+        step("st-send", "doing", mine.length > 1 ? `Confirm claim ${i + 1} of ${mine.length} in your wallet…` : "Confirm the claim in your wallet…");
+        const hash = await conn.provider.request({ method: "eth_sendTransaction", params: [{ from: who, to: mine[i].to, data: mine[i].data, value: "0x0", gas: hex((mine[i].gas * 13n) / 10n) }] });
+        if (cur?.token !== token) return;
+        step("st-send", i + 1 === mine.length ? "done" : "doing", `Sent: ${[...sent, hash].map(txLink).join(", ")}`);
+        step("st-done", "doing", "Waiting for Ethereum to include it (usually within a minute)…");
+        if (!await claimReceipt(hash, token)) return;
+        sent.push(hash);
+      }
+    }
+    const paid = [...mine.reduce((m, c) => m.add(c.row.account), new Set())].length;
+    const eWei = mine.reduce((s, c) => s + c.row.ethWei, 0n), dWei = mine.reduce((s, c) => s + c.row.daiWei, 0n);
+    const what = [eWei > 0n ? `${fmtAmt(eth(eWei))} ETH` : "", dWei > 0n ? `${fmtAmt(units(dWei, 18))} DAI` : ""].filter(Boolean).join(" + ");
+    step("st-done", "done", `Claimed: ${esc(what)} sent to <span class="mono">${esc(short(who))}</span> on Ethereum${paid > 1 ? ` from ${paid} accounts` : ""}. ${sent.map(txLink).join(", ")}. No service fee was taken. <button class="ghost" type="button" data-recheck>Check the address again</button> <button class="ghost" type="button" data-tip-open>Tip jar</button>`);
+  } catch (e) {
+    if (cur?.token !== token) return;
+    step("st-send", "fail", sent.length
+      ? `Stopped: ${esc(e?.code === 4001 ? "you cancelled the next claim in your wallet" : walletErr(e))}. ${sent.length} claim${sent.length > 1 ? "s" : ""} already went through: ${sent.map(txLink).join(", ")}.`
+      : esc(walletErr(e)));
+    step("st-done", "", "");
+    $("act-send").disabled = false;
+  }
+}
+
 async function sendAct() {
   const a = cur?.a, token = cur?.token;
   if (!a || !cur.built || !conn) return;
+  if (a.kind === "recovery") return sendClaims();
   $("act-send").disabled = true;
   try {
     const chainId = cur.built.chainId ?? 1;
