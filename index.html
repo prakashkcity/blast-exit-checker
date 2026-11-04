@@ -293,6 +293,15 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   padding: 7px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; min-width: 0;
 }
 
+/* ---- the popup after a claim: a big confirmation, then the optional tip jar ---- */
+.claimed-hero { background: var(--ok-bg); color: var(--ink); padding: 30px 22px 22px; display: grid; gap: 8px; justify-items: center; text-align: center; }
+.claimed-mark { width: 76px; height: 76px; border-radius: 50%; background: var(--sign); color: var(--sign-ink); display: grid; place-items: center; font-size: 2.6rem; font-weight: 800; line-height: 1; }
+.claimed-hero h2 { font-size: clamp(2rem, 7vw, 2.6rem); }
+.claimed-amount { font-size: clamp(1.15rem, 4.5vw, 1.45rem); font-weight: 700; overflow-wrap: anywhere; }
+.claimed-tip { padding: 20px 22px 22px; display: grid; gap: 12px; }
+.claimed-tip h3 { font-family: var(--font-sign); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; text-transform: none; color: var(--ink); }
+.claimed-tip button.primary { font-size: 1.08rem; padding: 13px 26px 11px; }
+
 @media (max-width: 520px) {
   th, td { padding: 7px 9px; }
 }
@@ -479,6 +488,24 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   <span class="t-text"><b>Found something worth getting out?</b> <span class="t-more">If this saved you time or money, a tip is welcome.</span> <span class="t-opt">Entirely optional.</span></span>
   <button class="act" type="button" id="tip-open">Tip jar</button>
 </aside>
+
+<dialog class="act-dlg" id="claimed-dlg" aria-labelledby="claimed-title">
+  <div class="claimed-hero">
+    <div class="claimed-mark" aria-hidden="true">✓</div>
+    <h2 id="claimed-title">Claimed!</h2>
+    <p class="claimed-amount mono" id="claimed-amount"></p>
+    <p class="small" id="claimed-note"></p>
+  </div>
+  <div class="claimed-tip">
+    <h3>Tip jar</h3>
+    <p id="claimed-tip-text"></p>
+    <div class="row">
+      <button class="primary" type="button" data-tip-open>Open the tip jar</button>
+      <button class="ghost" type="button" id="claimed-close">Done</button>
+    </div>
+    <p class="small muted">Entirely optional. Nothing is unlocked by sending.</p>
+  </div>
+</dialog>
 
 <dialog class="act-dlg" id="tip-dlg" aria-labelledby="tip-title">
   <div class="act-head">
@@ -2062,6 +2089,15 @@ async function batchReceipt(provider, id, token) {
   throw new Error("Still not confirmed after 15 minutes. Check your wallet's activity before trying again.");
 }
 const txLink = (hash) => `<a class="mono" href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`;
+// The moment a claim lands: a big confirmation, then the optional tip jar. Closing it refreshes the card.
+function showClaimed(what, who, hashes, usd, accounts) {
+  const fee = usd != null ? usd * 0.09 : null;
+  $("claimed-amount").textContent = what;
+  $("claimed-note").innerHTML = `Sent to <span class="mono">${esc(short(who))}</span> on Ethereum${accounts > 1 ? ` from ${accounts} accounts` : ""}. ${hashes.map(txLink).join(", ")}`;
+  $("claimed-tip-text").textContent = `No service fee was taken.${fee >= 0.01 ? ` A 9% fee would have cost you ${fmtUsd(fee)}.` : ""} If this page helped, a small tip is welcome.`;
+  if (dlg.open) dlg.close();
+  $("claimed-dlg").showModal();
+}
 
 async function sendClaims() {
   const a = cur.a, token = cur.token;
@@ -2104,7 +2140,8 @@ async function sendClaims() {
     const paid = [...mine.reduce((m, c) => m.add(c.row.account), new Set())].length;
     const eWei = mine.reduce((s, c) => s + c.row.ethWei, 0n), dWei = mine.reduce((s, c) => s + c.row.daiWei, 0n);
     const what = [eWei > 0n ? `${fmtAmt(eth(eWei))} ETH` : "", dWei > 0n ? `${fmtAmt(units(dWei, 18))} DAI` : ""].filter(Boolean).join(" + ");
-    step("st-done", "done", `Claimed: ${esc(what)} sent to <span class="mono">${esc(short(who))}</span> on Ethereum${paid > 1 ? ` from ${paid} accounts` : ""}. ${sent.map(txLink).join(", ")}. No service fee was taken. <button class="ghost" type="button" data-recheck>Check the address again</button> <button class="ghost" type="button" data-tip-open>Tip jar</button>`);
+    const px = (await context().catch(() => null))?.prices?.ethereum;
+    showClaimed(what, who, sent, px != null ? eth(eWei) * px + units(dWei, 18) : null, paid);
   } catch (e) {
     if (cur?.token !== token) return;
     step("st-send", "fail", sent.length
@@ -2190,6 +2227,8 @@ $("act-max").addEventListener("click", async () => { if (cur?.built?.maxAmount !
 $("act-amount").addEventListener("input", () => { if (cur) cur.isMax = false; });
 $("act-close").addEventListener("click", () => dlg.close());
 dlg.addEventListener("close", () => { cur = null; });
+$("claimed-close").addEventListener("click", () => $("claimed-dlg").close());
+$("claimed-dlg").addEventListener("close", () => $("check-form").requestSubmit());
 
 // ---------------------------------------------------------------------------
 // Tip jar (optional). The visitor picks network, token and any amount on this page; the wallet then
