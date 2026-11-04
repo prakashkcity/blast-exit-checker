@@ -1275,13 +1275,18 @@ function tokenAdvice(t, exitFeeUsd, closed) {
 const unpricedAdvice = (sym) => /^[aw]WETH$/i.test(sym) || /^a[A-Z]/.test(sym)
   ? "Lending receipt; withdraw it in the app that issued it"
   : "No Blast market with real liquidity found";
-// What is still unclaimed in Blast's recovery lists, and the Ethereum fee to claim it (one claim per list).
+// What is still unclaimed in Blast's recovery lists, and the Ethereum fee to claim it. Each list and
+// account is its own transaction, so one worth less than its fee is left out of the sums. If only
+// such dust is left, it is shown with the fee for one claim.
 function recoverySums(res, ctx) {
   const open = (res.recovery?.rows || []).filter((r) => r.claimed !== true);
-  const ethAmt = open.reduce((s, r) => s + eth(r.ethWei), 0), dai = open.reduce((s, r) => s + units(r.daiWei, 18), 0);
-  const px = ctx.prices?.ethereum;
-  const feeWei = open.length ? costWei(ctx, CFG.recoveryClaimGas * BigInt(open.length)) : 0n;
-  return { open, usd: px != null ? ethAmt * px + dai : null, feeWei, feeUsd: toUsd(ctx, feeWei) };
+  const px = ctx.prices?.ethereum, oneUsd = toUsd(ctx, costWei(ctx, CFG.recoveryClaimGas));
+  const value = (r) => eth(r.ethWei) * px + units(r.daiWei, 18);
+  const dust = (r) => px != null && oneUsd != null && value(r) <= oneUsd;
+  const worth = open.filter((r) => !dust(r)), shown = worth.length ? worth : open;
+  const claims = worth.length || (open.length ? 1 : 0);
+  const feeWei = claims ? costWei(ctx, CFG.recoveryClaimGas * BigInt(claims)) : 0n;
+  return { open, claims, dust, usd: px != null ? shown.reduce((s, r) => s + value(r), 0) : null, feeWei, feeUsd: toUsd(ctx, feeWei) };
 }
 function recoverySection(res, ctx) {
   const rc = res.recovery;
@@ -1295,14 +1300,14 @@ function recoverySection(res, ctx) {
   const value = (r) => (px != null ? eth(r.ethWei) * px + units(r.daiWei, 18) : eth(r.ethWei));
   const sorted = [...rc.rows].sort((x, y) => Number(y.account === res.address) - Number(x.account === res.address) || value(y) - value(x));
   const others = new Set(rc.rows.filter((r) => r.account !== res.address).map((r) => r.account)).size + (rc.moreAccounts || 0);
+  const sums = recoverySums(res, ctx);
   const rows = sorted.map((r) => {
     const e = eth(r.ethWei), d = units(r.daiWei, 18), own = r.account === res.address;
-    const notes = [!own ? "this wallet is approved to claim it" : r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.pending ? "includes an unfinished withdrawal" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
+    const notes = [!own ? "this wallet is approved to claim it" : r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.pending ? "includes an unfinished withdrawal" : "", r.claimed !== true && sums.dust(r) ? "worth less than its fee" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
     const who = own ? esc(r.label) : `<a class="mono" href="https://blastexplorer.io/address/${esc(r.account)}" target="_blank" rel="noopener noreferrer">${esc(short(r.account))}</a> · ${esc(r.label)}`;
     const status = r.claimed === true ? `<span class="pill ok">Claimed</span>` : r.claimed === false ? `<span class="pill warn">Not claimed yet</span>` : `<span class="pill none">Claim status unknown</span>`;
     return `<tr><td>${who}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td></tr>`;
   }).join("");
-  const sums = recoverySums(res, ctx);
   return `
     <h3>Blast recovery</h3>
     ${others ? `<p class="small">This wallet is approved to claim for ${others} other account${others > 1 ? "s" : ""}, such as a Safe or a contract it deployed. Their funds are listed here too.</p>` : ""}
@@ -1410,7 +1415,7 @@ function walletCard(res, ctx) {
     ${closed ? (rec.open.length ? `
     <div class="sum">
       <div><b>${fmtUsd(rec.usd)}</b><span>To claim on Ethereum</span></div>
-      <div><b>${fmtUsd(rec.feeUsd)}</b><span>Fee to claim (${rec.open.length} Ethereum transaction${rec.open.length > 1 ? "s" : ""})</span></div>
+      <div><b>${fmtUsd(rec.feeUsd)}</b><span>Fee to claim (${rec.claims} Ethereum transaction${rec.claims > 1 ? "s" : ""})</span></div>
       <div><b>${rec.usd != null && rec.feeUsd != null ? fmtUsd(Math.max(0, rec.usd - rec.feeUsd)) : "?"}</b><span>You would keep</span></div>
       ${l1Cell}
     </div>` : "") : nothing ? `<p class="empty">No balance and no bridge withdrawals found for this address on Blast.</p>` : `
