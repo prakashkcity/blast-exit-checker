@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Blast Exit Checker</title>
-<meta name="description" content="Paste a wallet address and see what Blast's official recovery list shows for it and what it still holds on Blast L2. Checking needs no wallet. Claims happen on blast.io.">
+<meta name="description" content="Paste a wallet address and see what Blast's official recovery list shows for it and what it still holds on Blast L2. Checking needs no wallet. This page does not claim; Blast's own claim page is blast.io.">
 <meta property="og:title" content="Blast Exit Checker">
-<meta property="og:description" content="Blast L2 shutdown checker: what Blast's recovery list shows for an address, the Ethereum fee to claim it, and what is left on Blast. Checking needs no wallet. Claims happen on blast.io.">
+<meta property="og:description" content="Blast L2 shutdown checker: what Blast's recovery list shows for an address, the Ethereum fee to claim it, and what is left on Blast. Checking needs no wallet. This page does not claim; Blast's own claim page is blast.io.">
 <meta property="og:type" content="website">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='10' width='60' height='44' rx='8' fill='%230f6b4a'/%3E%3Crect x='6' y='14' width='52' height='36' rx='5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M20 40 L40 24 M30 24 H40 V34' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -335,7 +335,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="safe" aria-label="Safety">
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Checking needs no wallet</span>
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>This page cannot claim or move funds</span>
-      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Claim only on blast.io</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Blast's own claim page is blast.io</span>
     </div>
     <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. It reads public data and shows what Blast's recovery list says. To claim, go to <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>: your wallet sends one transaction on Ethereum to Blast's recovery contract <code>0x9D31…7869</code> or <code>0x23eA…B513</code>, so check that address before confirming. Blast's claim has no service fee, only Ethereum gas, so there is no need to pay a percentage to any site. Anything that asks for your seed phrase on a website, or for ETH to "unlock" a claim, is a scam.</p>
   </section>
@@ -462,7 +462,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   </section>
 
   <footer>
-    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It reads public data and cannot claim or move funds. Confirm the amount on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a> before acting, and claim only there.</p>
+    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It reads public data and cannot claim or move funds. Confirm the amount on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a> before acting. It is Blast's own claim page and charges no service fee.</p>
     <p>Blast's recovery contracts on Ethereum: <code>0x9D31771458B421C7EA8A06CB8D12663E91617869</code> and <code>0x23eA8c6ACEb5673BBd712137cE2Aa33db36CB513</code>. Read for status only: Blast portal <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>, ETH withdrawal queue <code>0x98078db053902644191f93988341E31289E1C8FE</code>, USDB→DAI withdrawal queue <code>0xa230285d5683C74935aD14c446e137c8c8828438</code>.</p>
   </footer>
 </div>

@@ -12,11 +12,11 @@ A page for the Blast L2 shutdown. Blast paused its Ethereum portal on 3 November
 
 **Checking needs no wallet.** The page reads public data only. It has no field for a seed phrase or private key. A link like `…/blast-exit-checker/#0xabc…` opens with that address checked, and each card has a Copy link button. The part after `#` stays in the browser.
 
-**Claims happen only on blast.io.** This page cannot claim or move funds. Blast's claim sends one transaction on Ethereum to its recovery contract, from the wallet that held the funds or a wallet approved for it. The ETH and DAI go to the wallet that sends it. Blast charges no service fee for this, only Ethereum gas.
+**This page does not claim or move funds.** Blast's own claim page is https://blast.io. The contract is public, so other tools can call it too; some of them charge a fee, and Blast's page does not. Blast's claim sends one transaction on Ethereum to its recovery contract, from the wallet that held the funds or a wallet approved for it. The ETH and DAI go to the wallet that sends it. Blast charges no service fee for this, only Ethereum gas.
 
 **The old route.** While the portal reads as paused, or its state cannot be read, the page offers none of its old Withdraw, Unwrap, Prove and Claim buttons, and started withdrawals show as "Bridge closed". The code stays in the file: if the portal reads as open, those buttons come back. They ask the visitor's own wallet (any EIP-1193 / EIP-6963 wallet) to send one transaction, after rebuilding it from Blast and Ethereum data and simulating it with `eth_estimateGas`.
 
-Unofficial community tool, not affiliated with Blast. Claim only at https://blast.io
+Unofficial community tool, not affiliated with Blast.
 
 ## How it works
 
