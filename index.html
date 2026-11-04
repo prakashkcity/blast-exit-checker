@@ -313,7 +313,6 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   </div>
 
   <dl class="live" id="live" aria-live="polite">
-    <div><dt>Blast chain</dt><dd id="lv-blast">checking…</dd><span class="sub" id="lv-blast-sub">&nbsp;</span></div>
     <div><dt>Ethereum gas</dt><dd id="lv-gas">checking…</dd><span class="sub" id="lv-gas-sub">&nbsp;</span></div>
     <div><dt id="lv-delay-dt">Blast bridge</dt><dd id="lv-delay">checking…</dd><span class="sub" id="lv-delay-sub">read from the contract on Ethereum</span></div>
     <div><dt id="lv-cost-dt">Cost to claim at blast.io</dt><dd id="lv-cost">checking…</dd><span class="sub" id="lv-cost-sub">one Ethereum transaction</span></div>
@@ -802,7 +801,7 @@ async function rpc(urls, calls) {
 }
 
 // ---------------------------------------------------------------------------
-// Chain context: L1 gas, portal state, latest output, queue, prices, Blast head.
+// Chain context: L1 gas, portal state, latest output, queue, prices.
 // ---------------------------------------------------------------------------
 let ctxPromise = null, ctxAt = 0;
 function context() {
@@ -826,14 +825,11 @@ async function loadContext() {
       latestOutputBlock: big(word(out, 2)), latestOutputTime: Number(big(word(out, 1))),
     });
   })().catch((e) => ctx.errors.push("Ethereum: " + e.message));
-  const l2 = rpc(CFG.blastRpcs, [{ method: "eth_getBlockByNumber", params: ["latest", false] }])
-    .then(([b]) => { ctx.blastBlock = Number(big(b.number)); ctx.blastTime = Number(big(b.timestamp)); })
-    .catch((e) => ctx.errors.push("Blast: " + e.message));
   const prices = loadPrices().then((v) => {
     ctx.prices = v;
     if (v.ethereum == null) ctx.errors.push("Prices unavailable right now");
   });
-  await Promise.all([l1, l2, prices]);
+  await Promise.all([l1, prices]);
   ctx.gasPrice = ctx.baseFee != null ? ctx.baseFee + CFG.tipWei : null;
   return ctx;
 }
@@ -880,11 +876,6 @@ async function dexPrices(addrs) {
 }
 
 function renderLive(ctx) {
-  if (ctx.blastBlock) {
-    const age = Math.max(0, Math.round(Date.now() / 1000 - ctx.blastTime));
-    $("lv-blast").textContent = age < 120 ? "Running" : "Stalled?";
-    $("lv-blast-sub").textContent = `block ${ctx.blastBlock.toLocaleString("en-US")} · ${age < 120 ? age + "s ago" : fmtIn(age) + " ago"}`;
-  } else { $("lv-blast").textContent = "Not answering"; $("lv-blast-sub").textContent = "Blast RPC did not respond"; }
   if (ctx.baseFee != null) {
     const closed = ctx.paused !== false;
     const gas = closed ? CFG.recoveryClaimGas : CFG.proveGas + CFG.finalizeGas, what = closed ? "one Ethereum transaction" : "prove + claim";
