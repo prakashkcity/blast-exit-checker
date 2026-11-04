@@ -10,7 +10,7 @@ A page for the Blast L2 shutdown. Blast paused its Ethereum portal on 3 November
 - NFTs on Blast, which the recovery does not cover
 - withdrawals the address started on the old bridge
 
-**Checking needs no wallet.** The page reads public data only. It has no field for a seed phrase or private key.
+**Checking needs no wallet.** The page reads public data only. It has no field for a seed phrase or private key. A link like `…/blast-exit-checker/#0xabc…` opens with that address checked, and each card has a Copy link button. The part after `#` stays in the browser.
 
 **Claims happen only on blast.io.** This page cannot claim or move funds. Blast's claim sends one transaction on Ethereum to its recovery contract, from the wallet that held the funds or a wallet approved for it. The ETH and DAI go to the wallet that sends it. Blast charges no service fee for this, only Ethereum gas.
 

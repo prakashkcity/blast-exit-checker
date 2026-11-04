@@ -1402,6 +1402,7 @@ function walletCard(res, ctx) {
         <span class="mono" title="${esc(res.address)}">${esc(short(res.address))}</span>
         <a href="https://blastexplorer.io/address/${esc(res.address)}" target="_blank" rel="noopener noreferrer">Explorer</a>
         <button class="ghost" type="button" data-copy="${esc(res.address)}">Copy</button>
+        <button class="ghost" type="button" data-copy="${esc(location.origin + location.pathname + "#" + res.address)}" title="A link that opens this check">Copy link</button>
       </div>
       <div class="row">${pill}</div>
     </header>
@@ -2023,6 +2024,16 @@ $("check-form").addEventListener("submit", async (e) => {
     });
   } finally { btn.disabled = false; rateWaitHook = null; }
 });
+
+// A link like …/#0xabc… opens with that address checked. What follows # never reaches a server.
+function checkFromLink() {
+  const found = location.hash.match(/0x[0-9a-fA-F]{40}/g);
+  if (!found) return;
+  $("addrs").value = found.slice(0, CFG.maxWallets).join("\n");
+  if (!$("check-btn").disabled) $("check-form").requestSubmit();
+}
+window.addEventListener("hashchange", checkFromLink);
+checkFromLink();
 </script>
 </body>
 </html>
