@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Blast Exit Checker</title>
-<meta name="description" content="Paste a wallet address and see what it still holds on Blast L2, which withdrawals are waiting to be proven or claimed, and whether the Ethereum fees are worth it. Checking needs no wallet; optional Withdraw, Prove and Claim buttons send one transaction from your own wallet to Blast's official contracts.">
+<meta name="description" content="Paste a wallet address and see what Blast's official recovery list shows for it and what it still holds on Blast L2. Checking needs no wallet. Claims happen on blast.io.">
 <meta property="og:title" content="Blast Exit Checker">
-<meta property="og:description" content="Blast L2 shutdown checker: balances, withdrawal status, fees vs value, and Withdraw / Prove / Claim buttons that work after the official bridge page closes. No approvals, no message signatures.">
+<meta property="og:description" content="Blast L2 shutdown checker: what Blast's recovery list shows for an address, the Ethereum fee to claim it, and what is left on Blast. Checking needs no wallet. Claims happen on blast.io.">
 <meta property="og:type" content="website">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='10' width='60' height='44' rx='8' fill='%230f6b4a'/%3E%3Crect x='6' y='14' width='52' height='36' rx='5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M20 40 L40 24 M30 24 H40 V34' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -21,8 +21,8 @@
   else { try { window.top.location = window.self.location.href; } catch (e) { /* not allowed: stay hidden */ } }
 </script>
 <style>
-/* Layout: a highway exit sign holds the countdown; under it one working column —
-   live chain status, the address box, a results board per wallet, then how to get out. */
+/* Layout: a highway exit sign points to Blast's recovery page; under it one working column:
+   live chain status, the address box, a results board per wallet, then how to claim. */
 @font-face { font-family: "Overpass"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("fonts/overpass-latin.woff2") format("woff2"); }
 @font-face { font-family: "Overpass Mono"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("fonts/overpass-mono-latin.woff2") format("woff2"); }
 
@@ -90,7 +90,7 @@ p { margin: 0; }
   border-radius: 14px; padding: 7px;
   box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 10px 24px -18px rgba(0,0,0,.55);
 }
-/* Wide: words on the left, countdown on the right. Narrow: one column. */
+/* Wide: words on the left, the link on the right. Narrow: one column. */
 .sign-face {
   border: 2.5px solid var(--sign-ink); border-radius: 10px; padding: 14px clamp(14px, 3vw, 26px) 12px;
   display: grid; grid-template-columns: 1fr auto; grid-template-areas: "kicker count" "title count" "note count";
@@ -98,7 +98,7 @@ p { margin: 0; }
 }
 .sign-kicker { grid-area: kicker; }
 .sign-title { grid-area: title; }
-.countdown { grid-area: count; }
+.sign-cta { grid-area: count; }
 .sign-note { grid-area: note; }
 .sign-tab {
   position: absolute; top: -13px; left: clamp(16px, 4vw, 36px);
@@ -108,11 +108,12 @@ p { margin: 0; }
 .sign-kicker { font-family: var(--font-sign); font-weight: 700; letter-spacing: 0.14em; font-size: 0.7rem; opacity: .9; text-transform: uppercase; }
 .sign-title { font-family: var(--font-sign); font-weight: 800; font-size: clamp(1.3rem, 3.3vw, 2rem); letter-spacing: -0.015em; }
 .sign-title span { white-space: nowrap; }
-.countdown { display: flex; flex-wrap: wrap; gap: 6px; }
-.cd-cell { background: var(--sign-deep); border-radius: 7px; padding: 6px 9px 4px; min-width: 56px; display: grid; justify-items: start; }
-.cd-cell b { font-family: var(--font-mono); font-weight: 700; font-size: clamp(1.2rem, 3vw, 1.6rem); line-height: 1; font-variant-numeric: tabular-nums; }
-.cd-cell i { font-style: normal; font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; opacity: .85; }
-.sign-note { font-size: 0.76rem; opacity: .9; max-width: 62ch; }
+.sign-cta {
+  background: var(--sign-ink); color: var(--sign-deep); border-radius: 8px; padding: 11px 18px 9px; width: fit-content; white-space: nowrap;
+  font-family: var(--font-sign); font-weight: 800; font-size: 1.05rem; text-decoration: none;
+}
+.sign-cta:hover { color: var(--sign-deep); background: #e6f1ec; }
+.sign-note { font-size: 0.8rem; opacity: .95; max-width: 68ch; }
 .sign-pole { width: 14px; height: 12px; background: linear-gradient(90deg, #8d958f, #b9c0bb 45%, #7e8680); border-radius: 0 0 3px 3px; }
 @media (max-width: 720px) {
   .sign-face { grid-template-columns: 1fr; grid-template-areas: "kicker" "title" "count" "note"; gap: 6px; }
@@ -290,7 +291,6 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
 }
 
 @media (max-width: 520px) {
-  .cd-cell { min-width: 64px; padding: 6px 9px 4px; }
   th, td { padding: 7px 9px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
@@ -304,14 +304,9 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
       <div class="sign-tab" aria-hidden="true">EXIT</div>
       <div class="sign-face">
         <p class="sign-kicker">Blast L2 is shutting down</p>
-        <h1 class="sign-title" id="sign-title">Normal bridge closes <span>26 Oct 2026</span></h1>
-        <div class="countdown" id="countdown" aria-live="off">
-          <div class="cd-cell"><b id="cd-d">--</b><i>days</i></div>
-          <div class="cd-cell"><b id="cd-h">--</b><i>hours</i></div>
-          <div class="cd-cell"><b id="cd-m">--</b><i>min</i></div>
-          <div class="cd-cell"><b id="cd-s">--</b><i>sec</i></div>
-        </div>
-        <p class="sign-note" id="cd-note">Blast's notice says "until October 26, 2026" with no time, so this counts to 00:00 UTC. After that, withdrawals still work through the bridge contracts on Ethereum.</p>
+        <h1 class="sign-title" id="sign-title">Bridge closed. Claim at <span>blast.io</span></h1>
+        <a class="sign-cta" href="https://blast.io/" target="_blank" rel="noopener noreferrer">Open blast.io</a>
+        <p class="sign-note">Blast paused its bridge on Ethereum on 3 Nov 2026 and moved the funds to a recovery claim. If you held ETH, WETH or USDB on Blast, or started a withdrawal that never finished, you claim it on Ethereum at blast.io, Blast's own page. Fake claim sites exist, so check the address in your browser.</p>
       </div>
     </header>
     <div class="sign-pole" aria-hidden="true"></div>
@@ -339,10 +334,10 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     </form>
     <div class="safe" aria-label="Safety">
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Checking needs no wallet</span>
-      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>No approvals, no message signatures</span>
-      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Withdraw / Prove / Claim go only to Blast's official contracts</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>This page cannot claim or move funds</span>
+      <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Claim only on blast.io</span>
     </div>
-    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. Its optional buttons ask your wallet to send one transaction: Withdraw goes to Blast's bridge <code>0x4300…0005</code> on Blast (Unwrap to WETH <code>0x4300…0004</code>), Prove and Claim go to Blast's portal <code>0x0Ec6…Db6Cb</code> on Ethereum (for USDB's last step, Blast's DAI queue <code>0xa230…8438</code>); check that address in your wallet before confirming. Anything that asks you to approve tokens, sign a message, or send ETH to "unlock" a claim is a scam.</p>
+    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. It reads public data and shows what Blast's recovery list says. To claim, go to <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>: your wallet sends one transaction on Ethereum to Blast's recovery contract <code>0x9D31…7869</code> or <code>0x23eA…B513</code>, so check that address before confirming. Anything that asks for your seed phrase on a website, or for ETH to "unlock" a claim, is a scam.</p>
   </section>
 
   <section aria-labelledby="results-h" style="display:grid;gap:14px">
@@ -353,29 +348,36 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
       <article class="wallet example" aria-label="Example result">
         <span class="example-tag">Example output, not a real wallet</span>
         <header class="wallet-head">
-          <div class="wallet-id"><span class="mono">0x1234…abcd</span><span class="small muted">Blastscan · Copy</span></div>
-          <div class="row"><span class="pill ok">Worth withdrawing</span> <span class="pill warn">In apps: $4.90</span> <span class="pill info">2 NFTs</span></div>
+          <div class="wallet-id"><span class="mono">0x1234…abcd</span><span class="small muted">Explorer · Copy</span></div>
+          <div class="row"><span class="pill ok">Claimable at blast.io</span> <span class="pill warn">In apps: $4.90</span> <span class="pill info">2 NFTs</span></div>
         </header>
         <div class="sum">
-          <div><b>$46.10</b><span>Still on Blast</span></div>
-          <div><b>$0.31</b><span>Fees to withdraw it now</span></div>
-          <div><b>$45.79</b><span>You would keep</span></div>
-          <div><b>$2.10</b><span>ETH on Ethereum, enough for these fees</span></div>
+          <div><b>$41.12</b><span>To claim on Ethereum</span></div>
+          <div><b>$0.03</b><span>Fee to claim (1 Ethereum transaction)</span></div>
+          <div><b>$41.09</b><span>You would keep</span></div>
+          <div><b>$2.10</b><span>ETH on Ethereum in this wallet, enough for the fee</span></div>
         </div>
+        <h3>Blast recovery</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>List</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Recovery list 1</td><td class="num">0.0142</td><td class="num">8</td><td class="num">$41.12</td><td><span class="pill warn">Not claimed yet</span></td></tr>
+          </tbody>
+        </table></div>
         <h3>On Blast now</h3>
         <div class="table-wrap"><table>
           <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th></tr></thead>
           <tbody>
-            <tr><td>ETH</td><td class="num">0.0142</td><td class="num">$33.20</td><td><span class="note">Withdraw through the bridge</span></td></tr>
-            <tr><td>USDB</td><td class="num">8.00</td><td class="num">$7.98</td><td><span class="note">Arrives on Ethereum as DAI after an extra claim, or swap to ETH on Blast first</span></td></tr>
-            <tr><td>BLAST</td><td class="num">300.00</td><td class="num">$0.02</td><td><span class="note">Bridging costs more than it is worth</span></td></tr>
+            <tr><td>ETH</td><td class="num">0.0142</td><td class="num">$33.12</td><td><span class="note">Bridge closed. Claim through Blast's recovery</span></td></tr>
+            <tr><td>USDB</td><td class="num">8.00</td><td class="num">$7.64</td><td><span class="note">Bridge closed. Claim through Blast's recovery</span></td></tr>
+            <tr><td>BLAST</td><td class="num">300.00</td><td class="num">$0.02</td><td><span class="note">Bridge closed. Blast's recovery lists only ETH, WETH and USDB</span></td></tr>
           </tbody>
         </table></div>
         <h3>Deposits in apps</h3>
         <div class="table-wrap"><table>
           <thead><tr><th>Receipt</th><th>What it holds</th><th class="num">Value</th><th>What to do</th></tr></thead>
           <tbody>
-            <tr><td>aWETH <span class="note">Example Lending WETH</span></td><td class="mono">0.0021 WETH</td><td class="num">$4.90</td><td><span class="note">Withdraw it in the lending app, then bridge</span></td></tr>
+            <tr><td>aWETH <span class="note">Example Lending WETH</span></td><td class="mono">0.0021 WETH</td><td class="num">$4.90</td><td><span class="note">Held by the app on Blast, and the bridge is closed. Check blast.io and the app's own notices</span></td></tr>
           </tbody>
         </table></div>
         <h3>NFTs on Blast</h3>
@@ -389,8 +391,8 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
         <div class="table-wrap board"><table>
           <thead><tr><th>Started</th><th>Amount</th><th>Status</th><th>Next step</th><th>Worth finishing?</th><th></th></tr></thead>
           <tbody>
-            <tr><td class="when">24 Oct 14:22</td><td class="mono">0.00048 ETH</td><td class="status"><span class="pill ok">Ready to claim</span></td><td>Claim on Ethereum</td><td><span class="pill ok">Yes</span> <span class="note">$1.10 vs $0.06</span></td><td><span class="note">Claim button</span></td></tr>
-            <tr><td class="when">24 Oct 14:31</td><td class="mono">575 BLAST</td><td class="status"><span class="pill warn">Ready to prove</span></td><td>Prove on Ethereum</td><td><span class="pill bad">No</span> <span class="note">$0.03 vs $0.15</span></td><td><span class="note">Prove button</span></td></tr>
+            <tr><td class="when">24 Oct 14:22</td><td class="mono">0.00048 ETH</td><td class="status"><span class="pill none">Bridge closed</span></td><td>Included in Blast's recovery; see the list above</td><td><span class="note">Cannot finish</span></td><td></td></tr>
+            <tr><td class="when">24 Oct 14:31</td><td class="mono">575 BLAST</td><td class="status"><span class="pill none">Bridge closed</span></td><td>Blast's recovery pays only ETH and DAI</td><td><span class="note">Cannot finish</span></td><td></td></tr>
           </tbody>
         </table></div>
       </article>
@@ -411,16 +413,14 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
 
   <section class="folds" aria-label="More about this page">
   <details class="fold">
-    <summary><span>How to get funds off Blast</span><small>5 steps</small></summary>
+    <summary><span>How to claim your funds</span><small>3 steps</small></summary>
     <div class="fold-body">
     <ol class="steps">
-      <li><p><b>Gather small balances first.</b> Every withdrawal costs the same on Ethereum, whatever the amount. If you have several wallets with a little ETH each, send it to one wallet on Blast first; a transfer on Blast costs a tiny fraction of a cent.</p></li>
-      <li><p><b>Turn tokens into ETH if you want ETH.</b> WETH must be unwrapped to ETH before it can be withdrawn. USDB withdrawn through the bridge arrives on Ethereum as DAI and needs one more claim transaction, so swapping it to ETH on a Blast exchange first is often simpler.</p></li>
-      <li><p><b>Start the withdrawal on Blast.</b> Check your address above and press <b>Withdraw</b> on ETH or USDB (or use <a href="https://blast.io/en/bridge" target="_blank" rel="noopener noreferrer">blast.io/en/bridge</a> while it is open). This needs a little ETH on Blast for gas; "Max" keeps it aside for you.</p></li>
-      <li><p><b>Prove it on Ethereum about an hour later.</b> This is the first Ethereum transaction and needs ETH on Ethereum for gas. Check your address above and press <b>Prove</b> on the withdrawal.</p></li>
-      <li><p><b>Claim it 24 hours after proving.</b> Press <b>Claim</b>. This second Ethereum transaction releases the funds to the same address on Ethereum. USDB arrives as DAI after one more claim, which only the receiving wallet can send.</p></li>
+      <li><p><b>Check the address.</b> Paste it above, or look it up on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>. If you used a Safe or other smart wallet, look up that wallet; blast.io also finds the accounts a wallet is approved to claim for.</p></li>
+      <li><p><b>Open blast.io and connect the wallet.</b> Use the wallet that held the funds on Blast, on Ethereum mainnet. It needs a little ETH on Ethereum for gas. Nobody else can send the claim for it, unless their wallet is approved for that account.</p></li>
+      <li><p><b>Press Claim and confirm in your wallet.</b> It is one Ethereum transaction per list. The ETH and DAI go to the wallet that sends it, and USDB is paid as DAI.</p></li>
     </ol>
-    <p class="small muted">The Withdraw, Prove and Claim buttons call Blast's contracts directly, so they keep working after the bridge page closes. Withdraw must come from the wallet that holds the funds. Prove and Claim can be paid by any wallet: a friend can prove or claim your withdrawal, and the funds still go only to the address that withdrew. Blast's guide: <a href="https://docs.blast.io/withdrawals/withdraw-to-ethereum" target="_blank" rel="noopener noreferrer">docs.blast.io/withdrawals/withdraw-to-ethereum</a>. Blast PWA users: paste your PWA wallet address above to check it.</p>
+    <p class="small muted">Started a withdrawal that never finished? Blast's page says it is included automatically. Used the Blast Mobile app? Import its seed phrase into a wallet app such as MetaMask or Rabby, never into a website, then connect that wallet on blast.io; its address will look different. This page's old Withdraw, Prove and Claim buttons are off because the route they used is closed.</p>
     </div>
   </details>
   <details class="fold">
@@ -430,15 +430,15 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     </div>
   </details>
   <details class="fold">
-    <summary><span>How the numbers work</span><small>fees, prices, deposits, NFTs</small></summary>
+    <summary><span>How the numbers work</span><small>recovery, fees, prices, deposits, NFTs</small></summary>
     <div class="fold-body">
       <ul class="plain small">
-        <li><b>Fees:</b> one withdrawal needs two Ethereum transactions. Proving takes about 430,000 gas and claiming about 240,000 gas, the medians of recent transactions on the Blast portal contract. The page multiplies these by the current Ethereum gas price.</li>
-        <li><b>Worth it?</b> "Yes" means the value is higher than the Ethereum fees still to pay. Ethereum gas changes by the minute, so a "No" can turn into a "Yes" when gas is cheaper.</li>
+        <li><b>Recovery amounts</b> come from Blast's own claim files on blast.io, and the claim status from its contracts on Ethereum. The list is a fixed snapshot, so it can differ from the live balance on Blast. Listed USDB counts as DAI, and DAI as $1.</li>
+        <li><b>Fee:</b> a claim took about 88,000 gas in recent real claims. The page multiplies that by the current Ethereum gas price, so your wallet's figure can differ. "Fee is more than the amount" can change when gas is cheaper.</li>
         <li><b>Prices:</b> ETH, USDB and BLAST from CoinGecko; other tokens from DexScreener, and only if a Blast pool holds at least $1,000 of liquidity.</li>
         <li><b>Deposits in apps:</b> lending receipts (Aave-style) count 1:1 with the token they hold, vault shares (ERC-4626) are converted by the vault itself, and v2 liquidity tokens by their share of the pool. Concentrated-liquidity positions are listed without a value.</li>
-        <li><b>NFTs</b> cannot go through the official bridge. This page lists them but cannot see offers; a floor price is only the cheapest listing.</li>
-        <li><b>ETH on Ethereum</b> is what this address holds there to pay for prove and claim.</li>
+        <li><b>NFTs</b> are not part of Blast's recovery, which pays only ETH and DAI. This page lists them but cannot see offers; a floor price is only the cheapest listing.</li>
+        <li><b>ETH on Ethereum</b> is what this address holds there to pay the claim fee.</li>
         <li><b>Spam tokens and NFTs</b> that scammers airdropped are counted but hidden. Never interact with them or visit sites named in them.</li>
         <li>Withdrawal history covers the address's latest 100 transactions on Blast.</li>
       </ul>
@@ -449,20 +449,21 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="fold-body">
       <p class="small">Everything runs in your browser. There is no server and no tracking. Your address goes only to these public services:</p>
       <ul class="plain small">
+        <li><code>blast.io</code>: Blast's recovery list (only a file named by the first 3 characters of your address is requested, not the address)</li>
         <li><code>rpc.blast.io</code>: Blast balances and transactions (the only public Blast RPC still answering)</li>
-        <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): withdrawal status on Ethereum, gas price</li>
+        <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): claim status and withdrawal status on Ethereum, gas price</li>
         <li><code>api.routescan.io</code>: which tokens and NFTs an address holds, transaction history</li>
         <li><code>api.coingecko.com</code>, <code>api.dexscreener.com</code>: prices (no address sent)</li>
       </ul>
       <p class="small muted">Checking makes only read requests (balances, contract reads, receipts). Open your browser's developer tools, Network tab, to watch every request, or view the page source.</p>
-      <p class="small"><b>Withdraw / Unwrap / Prove / Claim buttons (optional).</b> Only when you press one, the page loads <code>vendor/ethers-6.13.4.umd.min.js</code> from this same site (an unmodified copy of ethers.js, MIT licence, checked by its hash), builds the transaction from Blast and Ethereum data, simulates it, and asks your wallet to send it. You confirm it in your wallet. The page never asks for approvals, message signatures, a seed phrase or a key, and never receives your funds: where the money goes is fixed inside the withdrawal.</p>
+      <p class="small"><b>Wallet use.</b> The old Withdraw, Unwrap, Prove and Claim buttons are off while Blast's portal is paused, so the only thing here that can ask your wallet for a transaction is the optional tip you start yourself. It loads <code>vendor/ethers-6.13.4.umd.min.js</code> from this same site (an unmodified copy of ethers.js, MIT licence, checked by its hash). The page never asks for approvals, message signatures, a seed phrase or a key.</p>
     </div>
   </details>
   </section>
 
   <footer>
-    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It cannot move funds by itself: its buttons only ask your own wallet to send a transaction to Blast's contracts, and you confirm it there. Check results on <a href="https://blastscan.io" target="_blank" rel="noopener noreferrer">blastscan.io</a> before acting, and withdraw only through the official bridge or Blast's documented contracts.</p>
-    <p>Contract addresses used: Blast portal on Ethereum <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>, ETH withdrawal queue <code>0x98078db053902644191f93988341E31289E1C8FE</code>, USDB→DAI withdrawal queue <code>0xa230285d5683C74935aD14c446e137c8c8828438</code>.</p>
+    <p><b>Unofficial community tool. Not affiliated with Blast.</b> It reads public data and cannot claim or move funds. Confirm the amount on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a> before acting, and claim only there.</p>
+    <p>Blast's recovery contracts on Ethereum: <code>0x9D31771458B421C7EA8A06CB8D12663E91617869</code> and <code>0x23eA8c6ACEb5673BBd712137cE2Aa33db36CB513</code>. Read for status only: Blast portal <code>0x0Ec68c5B10F21EFFb74f2A5C61DFe6b08C0Db6Cb</code>, output oracle <code>0x826D1B0D4111Ad9146Eb8941D7Ca2B6a44215c76</code>, ETH withdrawal queue <code>0x98078db053902644191f93988341E31289E1C8FE</code>, USDB→DAI withdrawal queue <code>0xa230285d5683C74935aD14c446e137c8c8828438</code>.</p>
   </footer>
 </div>
 
@@ -578,7 +579,6 @@ const CFG = {
   gasOracle: "0x420000000000000000000000000000000000000F", // OP-Stack GasPriceOracle: the L1 data fee
   blastTipWei: 1000000n,      // 0.001 gwei, Blast's eth_maxPriorityFeePerGas on 2026-10-26 (base fee ~0.00000025 gwei)
   topicMessagePassed: "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054",
-  deadlineMs: Date.UTC(2026, 9, 26, 0, 0, 0),
   proveGas: 429493n,
   finalizeGas: 241139n,
   usdbClaimGas: 104000n,      // third L1 tx for USDB → DAI (high end of recent claims)
@@ -799,24 +799,6 @@ async function rpc(urls, calls) {
   }
   throw lastErr || new Error("no RPC answered");
 }
-
-// ---------------------------------------------------------------------------
-// Countdown
-// ---------------------------------------------------------------------------
-function tick() {
-  const left = Math.floor((CFG.deadlineMs - Date.now()) / 1000);
-  if (left <= 0) {
-    ["cd-d", "cd-h", "cd-m", "cd-s"].forEach((id) => ($(id).textContent = "00"));
-    $("cd-note").textContent = "The date in Blast's notice has passed. Assets stay withdrawable, but through the bridge contracts on Ethereum directly; see Blast's guide below.";
-    return;
-  }
-  $("cd-d").textContent = String(Math.floor(left / 86400));
-  $("cd-h").textContent = String(Math.floor((left % 86400) / 3600)).padStart(2, "0");
-  $("cd-m").textContent = String(Math.floor((left % 3600) / 60)).padStart(2, "0");
-  $("cd-s").textContent = String(left % 60).padStart(2, "0");
-}
-tick();
-setInterval(tick, 1000);
 
 // ---------------------------------------------------------------------------
 // Chain context: L1 gas, portal state, latest output, queue, prices, Blast head.
@@ -1394,7 +1376,7 @@ function walletCard(res, ctx) {
     <header class="wallet-head">
       <div class="wallet-id">
         <span class="mono" title="${esc(res.address)}">${esc(short(res.address))}</span>
-        <a href="https://blastscan.io/address/${esc(res.address)}" target="_blank" rel="noopener noreferrer">Blastscan</a>
+        <a href="https://blastexplorer.io/address/${esc(res.address)}" target="_blank" rel="noopener noreferrer">Explorer</a>
         <button class="ghost" type="button" data-copy="${esc(res.address)}">Copy</button>
       </div>
       <div class="row">${pill}</div>
@@ -1701,7 +1683,7 @@ async function buildAct(a, amountRaw) {
 const dlg = $("act-dlg");
 let cur = null; // the open action: { a, built, token }
 const START = new Set(["start-eth", "start-usdb", "unwrap"]); // sent on Blast by the holder
-const BLAST_NET = { chainId: "0x13e31", chainName: "Blast", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.blast.io"], blockExplorerUrls: ["https://blastscan.io"] };
+const BLAST_NET = { chainId: "0x13e31", chainName: "Blast", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.blast.io"], blockExplorerUrls: ["https://blastexplorer.io"] };
 const TITLES = { prove: "Prove this withdrawal", claim: "Claim this withdrawal", dai: "Claim the DAI",
   "start-eth": "Withdraw ETH from Blast", "start-usdb": "Withdraw USDB from Blast (arrives as DAI)", unwrap: "Unwrap WETH on Blast" };
 function step(id, state, html) { const li = $(id); li.className = state || ""; if (html != null) li.querySelector(".msg").innerHTML = html; }
@@ -1856,7 +1838,7 @@ async function sendAct() {
     if (b.maxFeePerGas != null) Object.assign(params, { maxFeePerGas: hex(b.maxFeePerGas), maxPriorityFeePerGas: hex(b.maxPriorityFeePerGas) });
     const hash = await conn.provider.request({ method: "eth_sendTransaction", params: [params] });
     if (cur?.token !== token) return;
-    const scan = chainId === CFG.blastChainId ? "https://blastscan.io/tx/" : "https://etherscan.io/tx/";
+    const scan = chainId === CFG.blastChainId ? "https://blastexplorer.io/tx/" : "https://etherscan.io/tx/";
     step("st-send", "done", `Sent: <a class="mono" href="${scan}${esc(hash)}" target="_blank" rel="noopener noreferrer">${esc(short(hash))}</a>`);
     await waitReceipt(hash, a, b, token);
   } catch (e) {
