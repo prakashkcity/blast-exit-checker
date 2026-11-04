@@ -320,8 +320,8 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
   <dl class="live" id="live" aria-live="polite">
     <div><dt>Blast chain</dt><dd id="lv-blast">checking…</dd><span class="sub" id="lv-blast-sub">&nbsp;</span></div>
     <div><dt>Ethereum gas</dt><dd id="lv-gas">checking…</dd><span class="sub" id="lv-gas-sub">&nbsp;</span></div>
-    <div><dt>Withdrawal delay</dt><dd id="lv-delay">checking…</dd><span class="sub" id="lv-delay-sub">read from the L1 contract</span></div>
-    <div><dt>Cost to claim one withdrawal</dt><dd id="lv-cost">checking…</dd><span class="sub" id="lv-cost-sub">prove + claim on Ethereum</span></div>
+    <div><dt id="lv-delay-dt">Blast bridge</dt><dd id="lv-delay">checking…</dd><span class="sub" id="lv-delay-sub">read from the contract on Ethereum</span></div>
+    <div><dt id="lv-cost-dt">Cost to claim at blast.io</dt><dd id="lv-cost">checking…</dd><span class="sub" id="lv-cost-sub">one Ethereum transaction</span></div>
   </dl>
 
   <section class="panel" aria-labelledby="check-h">
@@ -903,15 +903,19 @@ function renderLive(ctx) {
     $("lv-blast-sub").textContent = `block ${ctx.blastBlock.toLocaleString("en-US")} · ${age < 120 ? age + "s ago" : fmtIn(age) + " ago"}`;
   } else { $("lv-blast").textContent = "Not answering"; $("lv-blast-sub").textContent = "Blast RPC did not respond"; }
   if (ctx.baseFee != null) {
+    const closed = ctx.paused !== false;
+    const gas = closed ? CFG.recoveryClaimGas : CFG.proveGas + CFG.finalizeGas, what = closed ? "one Ethereum transaction" : "prove + claim";
     $("lv-gas").textContent = `${gwei(ctx.baseFee)} gwei`;
     $("lv-gas-sub").textContent = ctx.hourLow != null ? `last hour: low ${gwei(ctx.hourLow)}, median ${gwei(ctx.hourMedian)}` : "";
-    $("lv-delay").textContent = ctx.finPeriod ? `${(ctx.finPeriod / 3600).toLocaleString("en-US")} hours` : "?";
-    $("lv-delay-sub").textContent = ctx.paused ? "Portal is PAUSED on Ethereum" : "portal open · read from the L1 contract";
-    const claim = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
+    $("lv-delay-dt").textContent = closed ? "Blast bridge" : "Withdrawal delay";
+    $("lv-delay").textContent = closed ? "Closed" : ctx.finPeriod ? `${(ctx.finPeriod / 3600).toLocaleString("en-US")} hours` : "?";
+    $("lv-delay-sub").textContent = closed ? "portal paused on Ethereum · read from the contract" : "portal open · read from the L1 contract";
+    $("lv-cost-dt").textContent = closed ? "Cost to claim at blast.io" : "Cost to claim one withdrawal";
+    const claim = costWei(ctx, gas);
     const usd = toUsd(ctx, claim);
     $("lv-cost").textContent = usd != null ? fmtUsd(usd) : `${fmtAmt(eth(claim))} ETH`;
-    const lowUsd = ctx.hourLow != null ? toUsd(ctx, (CFG.proveGas + CFG.finalizeGas) * (ctx.hourLow + CFG.tipWei)) : null;
-    $("lv-cost-sub").textContent = lowUsd != null ? `prove + claim now · ${fmtUsd(lowUsd)} at the hour's low gas` : "prove + claim on Ethereum";
+    const lowUsd = ctx.hourLow != null ? toUsd(ctx, gas * (ctx.hourLow + CFG.tipWei)) : null;
+    $("lv-cost-sub").textContent = lowUsd != null ? `${what} now · ${fmtUsd(lowUsd)} at the hour's low gas` : `${what} on Ethereum`;
   } else {
     $("lv-gas").textContent = "Not answering"; $("lv-delay").textContent = "?"; $("lv-cost").textContent = "?";
   }
@@ -1106,7 +1110,7 @@ async function checkWallet(a) {
           const outs = await rpc(CFG.l1Rpcs, proven.map((w) => call(CFG.oracle, SEL.getOutput + uarg(w.provenIdx))));
           proven.forEach((w, i) => { w.outRoot = word(outs[i], 0); w.outTime = Number(big(word(outs[i], 1))); });
         }
-        res.withdrawals = ws.map((w) => describeWithdrawal(w, ctx));
+        res.withdrawals = ws.map((w) => closedRow(describeWithdrawal(w, ctx), ctx));
       }
     } catch (e) { res.errors.push("Withdrawal status: " + e.message); }
   }
@@ -1123,7 +1127,7 @@ async function checkWallet(a) {
         const o = base + 1 + 5 * i; // (uint256 amount, address recipient, uint256 timestamp, bool isFinalized, bool isClaimed)
         const recipient = addrOf(word(st, o + 1));
         if (!recipient || big(word(st, o + 4)) !== 0n) continue; // claimed already
-        res.withdrawals.push(describeDai({ requestId: ids[i], amountRaw: big(word(st, o)), recipient, time: Number(big(word(st, o + 2))), finalized: big(word(st, o + 3)) !== 0n }, ctx));
+        res.withdrawals.push(closedRow(describeDai({ requestId: ids[i], amountRaw: big(word(st, o)), recipient, time: Number(big(word(st, o + 2))), finalized: big(word(st, o + 3)) !== 0n }, ctx), ctx));
       }
     }
   } catch (e) { res.errors.push("DAI queue: " + e.message); }
@@ -1250,11 +1254,20 @@ function describeDai(d, ctx) {
     : { ...base, status: "DAI in Blast's queue", tone: "info", next: "Blast releases the DAI queue about every 12 hours; then claim it here", act: null };
 }
 
+// While the portal is paused nothing on the old route can finish. blast.io's FAQ says a withdrawal
+// that never finished is included automatically; the claim contract pays only ETH and DAI.
+function closedRow(row, ctx) {
+  if (ctx.paused === false || row.status === "Claimed") return row;
+  return { ...row, status: "Bridge closed", tone: "none", act: null, worth: null, closed: true,
+    next: /^(ETH|USDB|DAI)$/.test(row.asset) ? "Included in Blast's recovery; see the list above" : "Blast's recovery pays only ETH and DAI" };
+}
+
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
-function tokenAdvice(t, exitFeeUsd) {
+function tokenAdvice(t, exitFeeUsd, closed) {
   if (t.usd != null && t.usd < 0.01) return "Worth less than a cent";
+  if (closed) return /^(eth|weth|usdb)$/.test(t.kind) ? "Bridge closed. Claim through Blast's recovery" : "Bridge closed. Blast's recovery lists only ETH, WETH and USDB";
   if (t.kind === "eth") return "Withdraw through the bridge";
   if (t.kind === "weth") return "Unwrap to ETH on Blast, then withdraw";
   if (t.kind === "usdb") return "Arrives on Ethereum as DAI after an extra claim, or swap to ETH on Blast first";
@@ -1296,6 +1309,10 @@ function recoverySection(res, ctx) {
     ${recoverySums(res, ctx).open.length ? `<div class="row"><a class="act" href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">Claim at blast.io</a><span class="small muted">Sent by this wallet or a wallet approved for it, one Ethereum transaction per list. The ETH and DAI go to the wallet that sends it.</span></div>` : ""}`;
 }
 function walletCard(res, ctx) {
+  // Unknown counts as closed: hiding a route that works costs less than offering one that cannot finish.
+  const closed = ctx.paused !== false;
+  const rec = recoverySums(res, ctx);
+  const listed = !!res.recovery?.rows.length;
   const exitFeeWei = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
   const exitFeeUsd = toUsd(ctx, exitFeeWei);
   // Deposits come out once withdrawn in their app, so they count toward what can be withdrawn.
@@ -1304,10 +1321,17 @@ function walletCard(res, ctx) {
   const allValue = res.tokens.reduce((s, t) => s + (t.usd || 0), 0) + depositUsd;
   const nftCount = res.nfts.reduce((s, g) => s + g.count, 0);
   // An unread balance is not a zero balance: never tell someone "nothing left" when Blast did not answer.
-  const nothing = !res.blastUnread && !res.tokens.length && !res.unpriced.length && !res.withdrawals.length && !res.deposits.length && !nftCount;
+  const nothing = !res.blastUnread && !res.recovery?.error && !listed && !res.tokens.length && !res.unpriced.length && !res.withdrawals.length && !res.deposits.length && !nftCount;
 
   let pill;
-  if (res.blastUnread) pill = `<span class="pill warn">Blast balances could not be read</span>`;
+  if (closed) {
+    if (res.recovery?.error) pill = `<span class="pill warn">Recovery list could not be read</span>`;
+    else if (!listed) pill = `<span class="pill none">Not in Blast's recovery list</span>`;
+    else if (!rec.open.length) pill = `<span class="pill ok">Already claimed</span>`;
+    else if (rec.usd == null || rec.feeUsd == null) pill = `<span class="pill info">In Blast's recovery list</span>`;
+    else if (rec.usd > rec.feeUsd * 1.1) pill = `<span class="pill ok">Claimable at blast.io</span>`;
+    else pill = `<span class="pill bad">Fee is more than the amount</span>`;
+  } else if (res.blastUnread) pill = `<span class="pill warn">Blast balances could not be read</span>`;
   else if (nothing && !res.errors.length) pill = `<span class="pill none">Nothing on Blast</span>`;
   else if (!res.tokens.length && !res.deposits.length) pill = `<span class="pill none">No balance left on Blast</span>`;
   else if (exitFeeUsd == null) pill = `<span class="pill none">Fees unknown right now</span>`;
@@ -1320,19 +1344,19 @@ function walletCard(res, ctx) {
   if (depositUsd >= 0.5) pill += ` <span class="pill warn">In apps: ${fmtUsd(depositUsd)}</span>`;
   if (nftCount) pill += ` <span class="pill info">${nftCount} NFT${nftCount > 1 ? "s" : ""}</span>`;
   const keep = exitFeeUsd != null ? Math.max(0, withdrawable - exitFeeUsd) : null;
-  const ethLow = res.ethWei != null && res.ethWei === 0n && (res.tokens.length > 0 || res.deposits.length > 0);
+  const ethLow = !closed && res.ethWei != null && res.ethWei === 0n && (res.tokens.length > 0 || res.deposits.length > 0);
 
-  // ETH on Ethereum vs the prove + claim fees this wallet would pay: the withdrawals worth
-  // finishing, plus one new withdrawal if the balance is worth taking out.
-  let feesWei = finishable.reduce((s, w) => s + (w.feeWei || 0n), 0n);
-  if (exitFeeUsd != null && withdrawable > exitFeeUsd * 1.1 && exitFeeWei != null) feesWei += exitFeeWei;
+  // ETH on Ethereum vs the fees this wallet would pay: its recovery claims, or while the portal is
+  // open, the withdrawals worth finishing plus one new withdrawal if the balance is worth taking out.
+  let feesWei = closed ? rec.feeWei ?? 0n : finishable.reduce((s, w) => s + (w.feeWei || 0n), 0n);
+  if (!closed && exitFeeUsd != null && withdrawable > exitFeeUsd * 1.1 && exitFeeWei != null) feesWei += exitFeeWei;
   let l1Cell;
   if (res.l1Wei == null) l1Cell = `<div><b>?</b><span>ETH on Ethereum (could not read)</span></div>`;
   else {
     const have = toUsd(ctx, res.l1Wei);
-    const label = feesWei === 0n ? "ETH on Ethereum, for prove + claim fees"
-      : res.l1Wei >= feesWei ? "ETH on Ethereum, enough for these fees"
-      : `ETH on Ethereum, about ${fmtUsd(toUsd(ctx, feesWei - res.l1Wei))} short for these fees`;
+    const label = feesWei === 0n ? (closed ? "ETH on Ethereum in this wallet" : "ETH on Ethereum, for prove + claim fees")
+      : res.l1Wei >= feesWei ? (closed ? "ETH on Ethereum in this wallet, enough for the fee" : "ETH on Ethereum, enough for these fees")
+      : `ETH on Ethereum${closed ? " in this wallet" : ""}, about ${fmtUsd(toUsd(ctx, feesWei - res.l1Wei))} short for ${closed ? "the fee" : "these fees"}`;
     l1Cell = `<div class="${feesWei > 0n && res.l1Wei < feesWei ? "short" : ""}"><b>${have != null ? fmtUsd(have) : fmtAmt(eth(res.l1Wei)) + " ETH"}</b><span>${label}</span></div>`;
   }
 
@@ -1341,7 +1365,7 @@ function walletCard(res, ctx) {
     debt: "Money owed. Repay it before you can withdraw collateral" };
   const deposits = res.deposits.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((d) => `
     <tr><td>${esc(d.symbol)}${d.name ? ` <span class="note">${esc(d.name)}</span>` : ""}</td><td class="mono">${esc(d.holds)}</td>
-      <td class="num">${d.kind === "debt" ? `owed ${fmtUsd(d.usd)}` : fmtUsd(d.usd)}</td><td><span class="note">${esc(depositNote[d.kind])}</span></td></tr>`).join("");
+      <td class="num">${d.kind === "debt" ? `owed ${fmtUsd(d.usd)}` : fmtUsd(d.usd)}</td><td><span class="note">${esc(closed && d.kind !== "debt" ? "Held by the app on Blast, and the bridge is closed. Check blast.io and the app's own notices" : depositNote[d.kind])}</span></td></tr>`).join("");
   const shownNfts = res.nfts.slice(0, 15);
   const nfts = shownNfts.map((g) => `
     <tr><td>${esc(g.name || short(g.contract))} <span class="note">${g.kind}</span></td><td class="num">${g.count}</td>
@@ -1351,7 +1375,7 @@ function walletCard(res, ctx) {
   const spamText = [res.spam ? `${res.spam} spam airdrop token${res.spam > 1 ? "s" : ""}` : "", res.nftSpam ? `${res.nftSpam} spam NFT${res.nftSpam > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
 
   const rows = res.tokens.sort((x, y) => (y.usd || 0) - (x.usd || 0)).map((t) => `
-    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd))}</span></td><td>${startButton(t, res.address, exitFeeUsd)}</td></tr>`).join("");
+    <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">${fmtUsd(t.usd)}</td><td><span class="note">${esc(tokenAdvice(t, exitFeeUsd, closed))}</span></td><td>${closed ? "" : startButton(t, res.address, exitFeeUsd)}</td></tr>`).join("");
   const unpriced = res.unpriced.map((t) => `
     <tr><td>${esc(t.symbol)}</td><td class="num">${fmtAmt(t.amount)}</td><td class="num">?</td><td><span class="note">${esc(unpricedAdvice(t.symbol))}</span></td><td></td></tr>`).join("");
   const board = res.withdrawals.map((w) => `
@@ -1360,7 +1384,7 @@ function walletCard(res, ctx) {
       <td class="mono">${w.amount != null ? fmtAmt(w.amount) : "?"} ${esc(w.asset)}</td>
       <td class="status"><span class="pill ${w.tone}">${esc(w.status)}</span></td>
       <td>${esc(w.next)}</td>
-      <td>${w.worth === null ? `<span class="note">Done</span>` : w.worth === undefined ? `<span class="note">Price unknown</span>`
+      <td>${w.closed ? `<span class="note">Cannot finish</span>` : w.worth === null ? `<span class="note">Done</span>` : w.worth === undefined ? `<span class="note">Price unknown</span>`
         : `<span class="pill ${w.worth ? "ok" : "bad"}">${w.worth ? "Yes" : "No"}</span> <span class="note">${fmtUsd(w.usd)} vs ${fmtUsd(w.feeUsd)} fees</span>`}</td>
       <td>${w.act ? actButton(w, res.address) : ""}</td>
     </tr>`).join("");
@@ -1375,8 +1399,14 @@ function walletCard(res, ctx) {
       </div>
       <div class="row">${pill}</div>
     </header>
-    ${res.errors.length ? `<div class="err-box">Some data could not be read, so this result may be incomplete: ${esc(res.errors.join(" · "))}. Try again in a minute.</div>` : ""}
-    ${nothing ? `<p class="empty">No balance and no bridge withdrawals found for this address on Blast.</p>` : `
+    ${res.errors.length ? `<div class="err-box">${closed && !res.recovery?.error ? "Some Blast chain data could not be read, so the lists below may be incomplete. The recovery amount comes from blast.io and Ethereum and is not affected" : "Some data could not be read, so this result may be incomplete"}: ${esc(res.errors.join(" · "))}. Try again in a minute.</div>` : ""}
+    ${closed ? (rec.open.length ? `
+    <div class="sum">
+      <div><b>${fmtUsd(rec.usd)}</b><span>To claim on Ethereum</span></div>
+      <div><b>${fmtUsd(rec.feeUsd)}</b><span>Fee to claim (${rec.open.length} Ethereum transaction${rec.open.length > 1 ? "s" : ""})</span></div>
+      <div><b>${rec.usd != null && rec.feeUsd != null ? fmtUsd(Math.max(0, rec.usd - rec.feeUsd)) : "?"}</b><span>You would keep</span></div>
+      ${l1Cell}
+    </div>` : "") : nothing ? `<p class="empty">No balance and no bridge withdrawals found for this address on Blast.</p>` : `
     <div class="sum">
       <div><b>${res.blastUnread ? "?" : fmtUsd(allValue)}</b><span>${res.blastUnread ? "Still on Blast (could not read)" : "Still on Blast"}</span></div>
       <div><b>${exitFeeUsd != null ? fmtUsd(exitFeeUsd) : "?"}</b><span>Fees to withdraw it now</span></div>
@@ -1390,7 +1420,8 @@ function walletCard(res, ctx) {
       <thead><tr><th>Token</th><th class="num">Amount</th><th class="num">Value</th><th>What to do</th><th></th></tr></thead>
       <tbody>${rows}${unpriced}</tbody>
     </table></div>
-    ${res.tokens.some((t) => /^(eth|usdb|weth)$/.test(t.kind)) ? `<p class="small muted">Withdraw starts the withdrawal on Blast from this address itself (one transaction on Blast, a fraction of a cent). It arrives at the same address on Ethereum after Prove and Claim.</p>` : ""}` : ""}
+    ${closed ? `<p class="small muted">These are live balances on the Blast chain. Blast's recovery list was fixed at a snapshot, so its amounts can differ from them.</p>`
+      : res.tokens.some((t) => /^(eth|usdb|weth)$/.test(t.kind)) ? `<p class="small muted">Withdraw starts the withdrawal on Blast from this address itself (one transaction on Blast, a fraction of a cent). It arrives at the same address on Ethereum after Prove and Claim.</p>` : ""}` : ""}
     ${res.deposits.length ? `
     <h3>Deposits in apps</h3>
     <div class="table-wrap"><table>
