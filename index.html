@@ -337,7 +337,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>This page cannot claim or move funds</span>
       <span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Claim only on blast.io</span>
     </div>
-    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. It reads public data and shows what Blast's recovery list says. To claim, go to <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>: your wallet sends one transaction on Ethereum to Blast's recovery contract <code>0x9D31…7869</code> or <code>0x23eA…B513</code>, so check that address before confirming. Anything that asks for your seed phrase on a website, or for ETH to "unlock" a claim, is a scam.</p>
+    <p class="small muted">This page never asks for a seed phrase or private key and has no field for one. It reads public data and shows what Blast's recovery list says. To claim, go to <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>: your wallet sends one transaction on Ethereum to Blast's recovery contract <code>0x9D31…7869</code> or <code>0x23eA…B513</code>, so check that address before confirming. Blast's claim has no service fee, only Ethereum gas, so there is no need to pay a percentage to any site. Anything that asks for your seed phrase on a website, or for ETH to "unlock" a claim, is a scam.</p>
   </section>
 
   <section aria-labelledby="results-h" style="display:grid;gap:14px">
@@ -416,7 +416,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <summary><span>How to claim your funds</span><small>3 steps</small></summary>
     <div class="fold-body">
     <ol class="steps">
-      <li><p><b>Check the address.</b> Paste it above, or look it up on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>. If you used a Safe or other smart wallet, look up that wallet; blast.io also finds the accounts a wallet is approved to claim for.</p></li>
+      <li><p><b>Check the address.</b> Paste it above, or look it up on <a href="https://blast.io/" target="_blank" rel="noopener noreferrer">blast.io</a>. Check the wallets that deployed or owned your contracts too: a wallet can be approved to claim for a Safe or a contract, and those accounts can hold far more than the wallet.</p></li>
       <li><p><b>Open blast.io and connect the wallet.</b> Use the wallet that held the funds on Blast, on Ethereum mainnet. It needs a little ETH on Ethereum for gas. Nobody else can send the claim for it, unless their wallet is approved for that account.</p></li>
       <li><p><b>Press Claim and confirm in your wallet.</b> It is one Ethereum transaction per list. The ETH and DAI go to the wallet that sends it, and USDB is paid as DAI.</p></li>
     </ol>
@@ -449,7 +449,7 @@ dialog.act-dlg::backdrop { background: rgba(10, 20, 15, 0.55); }
     <div class="fold-body">
       <p class="small">Everything runs in your browser. There is no server and no tracking. Your address goes only to these public services:</p>
       <ul class="plain small">
-        <li><code>blast.io</code>: Blast's recovery list (only a file named by the first 3 characters of your address is requested, not the address)</li>
+        <li><code>blast.io</code>: Blast's recovery list (only files named by the first 2 or 3 characters of your address are requested, not the address)</li>
         <li><code>rpc.blast.io</code>: Blast balances and transactions (the only public Blast RPC still answering)</li>
         <li><code>ethereum-rpc.publicnode.com</code> (fallbacks <code>1rpc.io</code>, <code>cloudflare-eth.com</code>): claim status and withdrawal status on Ethereum, gas price</li>
         <li><code>api.routescan.io</code>: which tokens and NFTs an address holds, transaction history</li>
@@ -563,6 +563,7 @@ const CFG = {
   recoveryBase: "https://blast.io/claims/",
   recoveryPage: "https://blast.io/",
   recoveryClaimGas: 88000n,   // claim(): median of the last 100 real claims was 87,980 gas (2026-11-04)
+  recoveryMaxAccounts: 30,    // other accounts shown per wallet; a wallet can be approved for many more
   // Prove / claim only: an unmodified copy of ethers 6.13.4 (dist/ethers.umd.min.js), loaded on demand.
   ethersSrc: "vendor/ethers-6.13.4.umd.min.js",
   ethersSri: "sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM",
@@ -973,24 +974,39 @@ function recoveryFile(url, empty) {
   if (!recoveryFiles.has(url)) recoveryFiles.set(url, recoveryJson(url, empty).catch((e) => { recoveryFiles.delete(url); throw e; }));
   return recoveryFiles.get(url);
 }
-async function recoveryEntry(list, a) {
-  const base = `${CFG.recoveryBase}${list.id}/`;
-  const m = await recoveryFile(`${base}manifest.json`);
+async function recoveryManifest(list) {
+  const m = await recoveryFile(`${CFG.recoveryBase}${list.id}/manifest.json`);
   if (m?.version !== 1 || !m.shardPrefixLength) throw new Error("blast.io changed its claim data format");
-  const e = (await recoveryFile(`${base}shards/${a.slice(2, 2 + m.shardPrefixLength)}.json`, {}))[a];
+  return m;
+}
+async function recoveryEntry(list, a) {
+  const m = await recoveryManifest(list);
+  const e = (await recoveryFile(`${CFG.recoveryBase}${list.id}/shards/${a.slice(2, 2 + m.shardPrefixLength)}.json`, {}))[a];
   if (!e) return null;
   const [ethWei, daiWei, , , redeemers = [], pending = 0] = e;
-  return { ...list, ethWei: BigInt(ethWei), daiWei: BigInt(daiWei), redeemers: redeemers.length, pending: Number(pending) || 0, claimed: null, paused: null };
+  return { ...list, account: a, ethWei: BigInt(ethWei), daiWei: BigInt(daiWei), redeemers: redeemers.length, pending: Number(pending) || 0, claimed: null, paused: null };
+}
+// Other accounts this wallet is approved to claim for: Safes and contracts it owns or deployed. blast.io
+// reads the same redeemers files, and some of these accounts hold far more than the wallet itself.
+async function recoveryAccounts(list, a) {
+  const m = await recoveryManifest(list);
+  if (!m.redeemerPrefixLength) return [];
+  return (await recoveryFile(`${CFG.recoveryBase}${list.id}/redeemers/${a.slice(2, 2 + m.redeemerPrefixLength)}.json`, {}))[a] ?? [];
 }
 async function readRecovery(a) {
-  const rows = (await Promise.all(CFG.recovery.map((list) => recoveryEntry(list, a)))).filter(Boolean);
+  const others = new Set((await Promise.all(CFG.recovery.map((list) => recoveryAccounts(list, a)))).flat().map((x) => String(x).toLowerCase()));
+  others.delete(a);
+  const accounts = [a, ...[...others].slice(0, CFG.recoveryMaxAccounts)];
+  const found = await pool(accounts.flatMap((acc) => CFG.recovery.map((list) => [list, acc])), 4, ([list, acc]) => recoveryEntry(list, acc));
+  // An approved account with nothing in it needs no claim.
+  const rows = found.filter((r) => r && (r.account === a || r.ethWei > 0n || r.daiWei > 0n));
   if (rows.length) {
     // Claim status comes from the contracts. If Ethereum does not answer it stays unknown.
-    const st = await rpc(CFG.l1Rpcs, rows.flatMap((r) => [call(r.address, SEL.claimed + arg(a)), call(r.address, SEL.paused)])).catch(() => null);
+    const st = await rpc(CFG.l1Rpcs, rows.flatMap((r) => [call(r.address, SEL.claimed + arg(r.account)), call(r.address, SEL.paused)])).catch(() => null);
     const flag = (h) => (h == null ? null : big(h) !== 0n);
     if (st) rows.forEach((r, i) => { r.claimed = flag(st[2 * i]); r.paused = flag(st[2 * i + 1]); });
   }
-  return { rows };
+  return { rows, moreAccounts: Math.max(0, others.size - CFG.recoveryMaxAccounts) };
 }
 
 async function checkWallet(a) {
@@ -1276,19 +1292,27 @@ function recoverySection(res, ctx) {
     <h3>Blast recovery</h3>
     <p class="empty">This address is not in Blast's recovery list. If you used a Safe, a smart wallet or Blast Mobile, look up that wallet on ${site}.</p>`;
   const px = ctx.prices?.ethereum;
-  const rows = rc.rows.map((r) => {
-    const e = eth(r.ethWei), d = units(r.daiWei, 18);
-    const notes = [r.pending ? "includes an unfinished withdrawal" : "", r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
+  const value = (r) => (px != null ? eth(r.ethWei) * px + units(r.daiWei, 18) : eth(r.ethWei));
+  const sorted = [...rc.rows].sort((x, y) => Number(y.account === res.address) - Number(x.account === res.address) || value(y) - value(x));
+  const others = new Set(rc.rows.filter((r) => r.account !== res.address).map((r) => r.account)).size + (rc.moreAccounts || 0);
+  const rows = sorted.map((r) => {
+    const e = eth(r.ethWei), d = units(r.daiWei, 18), own = r.account === res.address;
+    const notes = [!own ? "this wallet is approved to claim it" : r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.pending ? "includes an unfinished withdrawal" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
+    const who = own ? esc(r.label) : `<a class="mono" href="https://blastexplorer.io/address/${esc(r.account)}" target="_blank" rel="noopener noreferrer">${esc(short(r.account))}</a> · ${esc(r.label)}`;
     const status = r.claimed === true ? `<span class="pill ok">Claimed</span>` : r.claimed === false ? `<span class="pill warn">Not claimed yet</span>` : `<span class="pill none">Claim status unknown</span>`;
-    return `<tr><td>${esc(r.label)}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td></tr>`;
+    return `<tr><td>${who}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td></tr>`;
   }).join("");
+  const sums = recoverySums(res, ctx);
   return `
     <h3>Blast recovery</h3>
+    ${others ? `<p class="small">This wallet is approved to claim for ${others} other account${others > 1 ? "s" : ""}, such as a Safe or a contract it deployed. Their funds are listed here too.</p>` : ""}
     <div class="table-wrap"><table>
-      <thead><tr><th>List</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th></tr></thead>
+      <thead><tr><th>Account and list</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    ${recoverySums(res, ctx).open.length ? `<div class="row"><a class="act" href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">Claim at blast.io</a><span class="small muted">Sent by this wallet or a wallet approved for it, one Ethereum transaction per list. The ETH and DAI go to the wallet that sends it.</span></div>` : ""}`;
+    ${rc.moreAccounts ? `<p class="small muted">${rc.moreAccounts} more approved account${rc.moreAccounts > 1 ? "s are" : " is"} not shown, so the total above may be low. blast.io lists them all.</p>` : ""}
+    ${sums.open.length ? `<div class="row"><a class="act" href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">Claim at blast.io</a><span class="small muted">Blast charges no service fee, only Ethereum gas: one transaction per list and account, sent by this wallet or a wallet approved for it. The ETH and DAI go to the wallet that sends it.</span></div>` : ""}
+    ${sums.usd >= 25 ? `<p class="small muted">This checker is free, and so is Blast's claim. If it helped you find money you had forgotten, a tip is welcome and never required. <button class="ghost" type="button" data-tip-open>Tip jar</button></p>` : ""}`;
 }
 function walletCard(res, ctx) {
   // Unknown counts as closed: hiding a route that works costs less than offering one that cannot finish.
