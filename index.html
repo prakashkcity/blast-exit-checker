@@ -223,11 +223,12 @@ footer { font-size: 0.84rem; color: var(--muted); display: grid; gap: 6px; }
 .soon .pill { width: fit-content; }
 
 /* ---- prove / claim through the visitor's wallet ---- */
-button.act {
+button.act, a.act {
   appearance: none; border: 0; border-radius: 7px; background: var(--sign); color: var(--sign-ink); white-space: nowrap;
   font-family: var(--font-sign); font-weight: 800; font-size: 0.86rem; padding: 6px 12px 4px; cursor: pointer;
 }
-button.act:hover { background: var(--sign-deep); }
+a.act { text-decoration: none; }
+button.act:hover, a.act:hover { background: var(--sign-deep); color: var(--sign-ink); }
 button.act.soft { background: transparent; color: var(--sign); border: 1.5px solid var(--sign); }
 dialog.act-dlg {
   width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
@@ -550,6 +551,17 @@ const CFG = {
   // recipient can claim (CallerIsNotRecipient otherwise; read on-chain 2026-10-25).
   usdQueue: "0xa230285d5683c74935ad14c446e137c8c8828438",
   passer: "0x4200000000000000000000000000000000000016",
+  // Blast's own recovery (measured 2026-11-04). Blast moved the bridge's backing into two BlastExit
+  // contracts on Ethereum and lists every account in static files, the same ones blast.io loads:
+  // manifest.json, then shards/<first characters of the address>.json, where an entry is
+  // [ethWei, daiWei, tree, leaf, redeemers?, pendingWithdrawals?] and a 404 is an empty shard.
+  recovery: [
+    { id: "contract-1", label: "Recovery list 1", address: "0x9d31771458b421c7ea8a06cb8d12663e91617869" },
+    { id: "contract-2", label: "Recovery list 2", address: "0x23ea8c6aceb5673bbd712137ce2aa33db36cb513" },
+  ],
+  recoveryBase: "https://blast.io/claims/",
+  recoveryPage: "https://blast.io/",
+  recoveryClaimGas: 88000n,   // claim(): median of the last 100 real claims was 87,980 gas (2026-11-04)
   // Prove / claim only: an unmodified copy of ethers 6.13.4 (dist/ethers.umd.min.js), loaded on demand.
   ethersSrc: "vendor/ethers-6.13.4.umd.min.js",
   ethersSri: "sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM",
@@ -596,6 +608,7 @@ const SEL = {
   decimals: "0x313ce567", symbol: "0x95d89b41", name: "0x06fdde03",
   // USD (DAI) withdrawal queue: getWithdrawalRequests(address), getWithdrawalStatus(uint256[])
   usdRequests: "0x7d031b65", usdStatus: "0xb8c4b85a",
+  claimed: "0xc884ef83", // BlastExit.claimed(address)
 };
 const SPAM_RE = /https?:|www\.|\.com\b|\.xyz|\.net\b|\.org\b|\.io\b|\.pro\b|\.app\b|t\.me|t\.ly|claim|visit|reward|airdrop|voucher|bonus|\[|!|\$\s/i;
 
@@ -953,11 +966,53 @@ async function routescanBridgeTxs(a) {
   });
 }
 
+// Blast's recovery list for one address. A missing shard or a missing entry means "not listed"; any
+// failed read is an error and is shown as one, never as "not listed".
+async function recoveryJson(url, empty) {
+  for (let t = 0; ; t++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(20000) }).catch(() => { throw new Error("blast.io did not answer"); });
+      if (r.status === 404 && empty !== undefined) return empty;
+      if (r.status === 429 || r.status >= 500) throw new Error(`blast.io is busy (HTTP ${r.status})`);
+      if (!r.ok) throw Object.assign(new Error(`blast.io answered HTTP ${r.status}`), { fatal: true });
+      return await r.json().catch(() => { throw new Error("blast.io sent a file this page cannot read"); });
+    } catch (e) {
+      if (e.fatal || t >= 2) throw e;
+      await sleep(1000 * (t + 1));
+    }
+  }
+}
+const recoveryFiles = new Map();
+function recoveryFile(url, empty) {
+  if (!recoveryFiles.has(url)) recoveryFiles.set(url, recoveryJson(url, empty).catch((e) => { recoveryFiles.delete(url); throw e; }));
+  return recoveryFiles.get(url);
+}
+async function recoveryEntry(list, a) {
+  const base = `${CFG.recoveryBase}${list.id}/`;
+  const m = await recoveryFile(`${base}manifest.json`);
+  if (m?.version !== 1 || !m.shardPrefixLength) throw new Error("blast.io changed its claim data format");
+  const e = (await recoveryFile(`${base}shards/${a.slice(2, 2 + m.shardPrefixLength)}.json`, {}))[a];
+  if (!e) return null;
+  const [ethWei, daiWei, , , redeemers = [], pending = 0] = e;
+  return { ...list, ethWei: BigInt(ethWei), daiWei: BigInt(daiWei), redeemers: redeemers.length, pending: Number(pending) || 0, claimed: null, paused: null };
+}
+async function readRecovery(a) {
+  const rows = (await Promise.all(CFG.recovery.map((list) => recoveryEntry(list, a)))).filter(Boolean);
+  if (rows.length) {
+    // Claim status comes from the contracts. If Ethereum does not answer it stays unknown.
+    const st = await rpc(CFG.l1Rpcs, rows.flatMap((r) => [call(r.address, SEL.claimed + arg(a)), call(r.address, SEL.paused)])).catch(() => null);
+    const flag = (h) => (h == null ? null : big(h) !== 0n);
+    if (st) rows.forEach((r, i) => { r.claimed = flag(st[2 * i]); r.paused = flag(st[2 * i + 1]); });
+  }
+  return { rows };
+}
+
 async function checkWallet(a) {
   const ctx = await context();
   const res = { address: a, errors: [...ctx.errors], tokens: [], unpriced: [], deposits: [], nfts: [], spam: 0, nftSpam: 0, withdrawals: [], l1Wei: null };
 
-  const [holdings, txs, base, nftItems, l1Wei] = await Promise.all([
+  const [recovery, holdings, txs, base, nftItems, l1Wei] = await Promise.all([
+    readRecovery(a).catch((e) => ({ rows: [], error: e.message })),
     routescanHoldings(a).catch((e) => { res.errors.push("Token list: " + e.message); return []; }),
     routescanBridgeTxs(a).catch((e) => { res.errors.push("Withdrawal history: " + e.message); return []; }),
     rpc(CFG.blastRpcs, [
@@ -969,6 +1024,7 @@ async function checkWallet(a) {
     rpc(CFG.l1Rpcs, [{ method: "eth_getBalance", params: [a, "latest"] }]).then(([b]) => big(b)).catch(() => null),
   ]);
   res.l1Wei = l1Wei;
+  res.recovery = recovery;
 
   // ---- balances on Blast ----
   const p = ctx.prices || {};
@@ -1208,6 +1264,37 @@ function tokenAdvice(t, exitFeeUsd) {
 const unpricedAdvice = (sym) => /^[aw]WETH$/i.test(sym) || /^a[A-Z]/.test(sym)
   ? "Lending receipt; withdraw it in the app that issued it"
   : "No Blast market with real liquidity found";
+// What is still unclaimed in Blast's recovery lists, and the Ethereum fee to claim it (one claim per list).
+function recoverySums(res, ctx) {
+  const open = (res.recovery?.rows || []).filter((r) => r.claimed !== true);
+  const ethAmt = open.reduce((s, r) => s + eth(r.ethWei), 0), dai = open.reduce((s, r) => s + units(r.daiWei, 18), 0);
+  const px = ctx.prices?.ethereum;
+  const feeWei = open.length ? costWei(ctx, CFG.recoveryClaimGas * BigInt(open.length)) : 0n;
+  return { open, usd: px != null ? ethAmt * px + dai : null, feeWei, feeUsd: toUsd(ctx, feeWei) };
+}
+function recoverySection(res, ctx) {
+  const rc = res.recovery;
+  if (!rc) return "";
+  const site = `<a href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">blast.io</a>`;
+  if (rc.error) return `<div class="err-box">Blast's recovery list could not be read, so this page cannot say what this address can claim (${esc(rc.error)}). Try again in a minute, or check the address on ${site}.</div>`;
+  if (!rc.rows.length) return `
+    <h3>Blast recovery</h3>
+    <p class="empty">This address is not in Blast's recovery list. If you used a Safe, a smart wallet or Blast Mobile, look up that wallet on ${site}.</p>`;
+  const px = ctx.prices?.ethereum;
+  const rows = rc.rows.map((r) => {
+    const e = eth(r.ethWei), d = units(r.daiWei, 18);
+    const notes = [r.pending ? "includes an unfinished withdrawal" : "", r.redeemers ? "smart wallet: its approved wallet claims it" : "", r.paused ? "Blast has paused this contract" : ""].filter(Boolean).join("; ");
+    const status = r.claimed === true ? `<span class="pill ok">Claimed</span>` : r.claimed === false ? `<span class="pill warn">Not claimed yet</span>` : `<span class="pill none">Claim status unknown</span>`;
+    return `<tr><td>${esc(r.label)}${notes ? ` <span class="note">${esc(notes)}</span>` : ""}</td><td class="num">${fmtAmt(e)}</td><td class="num">${fmtAmt(d)}</td><td class="num">${fmtUsd(px != null ? e * px + d : null)}</td><td>${status}</td></tr>`;
+  }).join("");
+  return `
+    <h3>Blast recovery</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>List</th><th class="num">ETH</th><th class="num">DAI</th><th class="num">Value</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    ${recoverySums(res, ctx).open.length ? `<div class="row"><a class="act" href="${CFG.recoveryPage}" target="_blank" rel="noopener noreferrer">Claim at blast.io</a><span class="small muted">Sent by this wallet or a wallet approved for it, one Ethereum transaction per list. The ETH and DAI go to the wallet that sends it.</span></div>` : ""}`;
+}
 function walletCard(res, ctx) {
   const exitFeeWei = costWei(ctx, CFG.proveGas + CFG.finalizeGas);
   const exitFeeUsd = toUsd(ctx, exitFeeWei);
@@ -1296,6 +1383,7 @@ function walletCard(res, ctx) {
       <div><b>${keep != null && !res.blastUnread ? fmtUsd(keep) : "?"}</b><span>You would keep</span></div>
       ${l1Cell}
     </div>`}
+    ${recoverySection(res, ctx)}
     ${res.tokens.length || res.unpriced.length ? `
     <h3>On Blast now</h3>
     <div class="table-wrap"><table>
